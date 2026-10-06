@@ -1,0 +1,8 @@
+node_modules/
+frontend/dist/
+build/
+config.local.php
+storage/*
+!storage/.htaccess
+.DS_Store
+*.zip
