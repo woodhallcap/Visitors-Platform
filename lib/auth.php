@@ -15,12 +15,12 @@ function session_rotate(): void
     }
 }
 
-/** The signed-in, active user, or null. Ends idle and disabled sessions. */
 function password_fingerprint(?string $hash): string
 {
     return $hash === null ? '' : substr(hash('sha256', $hash), 0, 16);
 }
 
+/** The signed-in, active user, or null. Ends idle and disabled sessions. */
 function session_user(): ?array
 {
     $id = $_SESSION['user_id'] ?? null;

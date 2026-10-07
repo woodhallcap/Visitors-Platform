@@ -26,7 +26,7 @@ function make_user(string $role = 'staff', array $o = []): array
             $o['phone'] ?? null,
             $role,
             $departmentId,
-            // Cost 4 keeps the suite fast; production uses PASSWORD_DEFAULT's cost.
+            // Cost 4 keeps the suite fast; production uses bcrypt cost 12 (PASSWORD_OPTIONS).
             $password === null ? null : password_hash($password, PASSWORD_BCRYPT, ['cost' => 4]),
             ($o['active'] ?? true) ? 1 : 0,
         ]

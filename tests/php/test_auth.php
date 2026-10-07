@@ -108,13 +108,24 @@ db_test('a user disabled mid-session is signed out on the next request', functio
 });
 
 db_test('writes without the CSRF header are rejected', function () {
-    act_as(make_user('staff'));
-    $missing = request('POST', '/auth/logout', [], [], []);
-    $wrong = request('POST', '/auth/logout', [], [], ['x-csrf-token' => str_repeat('0', 64)]);
+    act_as(make_user('admin'));
+    $missing = request('POST', '/departments', ['name' => 'Legal'], [], []);
+    $wrong = request('POST', '/departments', ['name' => 'Legal'], [], ['x-csrf-token' => str_repeat('0', 64)]);
     assert_status(403, $missing);
     assert_equal('csrf_failed', $missing->body['error']['code']);
     assert_status(403, $wrong);
-    assert_true(isset($_SESSION['user_id']), 'rejected logout must not end the session');
+    assert_equal(0, db_one('SELECT COUNT(*) AS n FROM departments')['n']);
+});
+
+db_test('logout works without a CSRF header and ends the session', function () {
+    act_as(make_user('staff'));
+    assert_status(200, request('POST', '/auth/logout', [], [], []));
+    assert_true(!isset($_SESSION['user_id']));
+    assert_status(401, request('GET', '/auth/me'));
+});
+
+db_test('logout still requires a session', function () {
+    assert_status(401, request('POST', '/auth/logout', [], [], []));
 });
 
 db_test('logout ends the session', function () {

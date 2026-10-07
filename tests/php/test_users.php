@@ -124,6 +124,15 @@ db_test('disabling a user ends their session; enabling restores access', functio
     assert_status(200, request('GET', '/auth/me'));
 });
 
+db_test('re-enabling a user does not revive links issued before the disable', function () {
+    $target = make_user('reception');
+    act_as(make_user('admin'));
+    $issued = token_issue($target['id'], 'reset');
+    request('PATCH', "/users/{$target['id']}", ['active' => false]);
+    request('PATCH', "/users/{$target['id']}", ['active' => true]);
+    assert_equal(null, token_consume($issued['token']));
+});
+
 db_test('IT users cannot disable themselves or change their own role', function () {
     $it = make_user('it');
     act_as($it);

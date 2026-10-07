@@ -96,6 +96,11 @@ function user_update(int $id, array $input, array $actor): array
         throw $e;
     }
 
+    if ($existing['active'] && !$data['active']) {
+        // Links issued before a disable must not come back to life on re-enable.
+        db_exec('UPDATE auth_tokens SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [$id]);
+    }
+
     $changed = [];
     foreach (['full_name', 'email', 'phone', 'role', 'department_id'] as $field) {
         if ($data[$field] !== $existing[$field]) {

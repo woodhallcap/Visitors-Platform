@@ -13,7 +13,15 @@ session_set_cookie_params([
     'httponly' => true,
     'samesite' => 'Lax',
 ]);
+// A private session dir: on shared hosts the system-wide cleanup uses php.ini's short gc_maxlifetime and would end sessions early.
+$sessionDir = dirname(__DIR__) . '/storage/sessions';
+if (!is_dir($sessionDir)) {
+    mkdir($sessionDir, 0700, true);
+}
+session_save_path($sessionDir);
 ini_set('session.gc_maxlifetime', (string) config('session_idle_seconds'));
+ini_set('session.gc_probability', '1');
+ini_set('session.gc_divisor', '100');
 session_start();
 
 $raw = file_get_contents('php://input');

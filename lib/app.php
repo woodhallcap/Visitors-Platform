@@ -42,7 +42,8 @@ function handle_request(
             }
         } else {
             require_user();
-            if ($method !== 'GET') {
+            // Signing out is harmless, so a stale CSRF token must never keep a session alive.
+            if ($method !== 'GET' && ($route['options']['csrf'] ?? true)) {
                 csrf_verify($headers['x-csrf-token'] ?? null);
             }
         }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 function register_auth_routes(Router $r): void
 {
     $r->add('POST', '/auth/login', 'auth_login', ['public' => true]);
-    $r->add('POST', '/auth/logout', 'auth_logout');
+    $r->add('POST', '/auth/logout', 'auth_logout', ['csrf' => false]);
     $r->add('GET', '/auth/me', 'auth_me');
     $r->add('POST', '/auth/set-password', 'auth_set_password', ['public' => true]);
 }
