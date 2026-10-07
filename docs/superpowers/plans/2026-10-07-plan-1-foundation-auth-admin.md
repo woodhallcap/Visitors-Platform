@@ -3444,6 +3444,7 @@ export function signedInAs(user: User): MockRoutes {
 ```tsx
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { api } from './lib/api';
 import { ADMIN, IT, STAFF, renderApp, signedInAs, signedOut } from './test-utils';
 
 test('signed-out visitors are sent to sign in', async () => {
@@ -3523,15 +3524,13 @@ test('signing out returns to the sign-in page', async () => {
 });
 
 test('a session that expires mid-use returns to sign in', async () => {
-  renderApp('/users', {
-    ...signedInAs(ADMIN),
-    'GET /users': () => [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }],
-    'GET /departments': () => [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }],
+  renderApp('/my-visitors', {
+    ...signedInAs(STAFF),
+    'GET /visits': () => [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }],
   });
-  // Task 8 shows ComingSoon on /users, so trigger an API call the way Task 9's page will.
-  const { api } = await import('./lib/api');
-  await screen.findByRole('link', { name: 'Departments' });
-  await api('GET', '/users').catch(() => undefined);
+  // /my-visitors makes no API calls yet, so trigger one the way a page would.
+  await screen.findByRole('link', { name: 'Book a visitor' });
+  await api('GET', '/visits').catch(() => undefined);
   expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
 });
 
@@ -4808,7 +4807,7 @@ and replace the `users` and `departments` placeholder routes with:
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `cd frontend && npx tsc -b && npm test && cd ..`
-Expected: no type errors; all test files pass, including the Task 8 tests (the `/users` session-expiry test now also exercises the real Users page).
+Expected: no type errors; all test files pass, including the Task 8 tests.
 
 - [ ] **Step 6: Commit**
 
