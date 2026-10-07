@@ -74,3 +74,19 @@ export interface Host {
   full_name: string;
   department_name: string | null;
 }
+
+export interface Stats {
+  from: string;
+  to: string;
+  cards: {
+    visitors_today: number;
+    on_site_now: number;
+    visits_in_range: number;
+    average_visit_minutes: number | null;
+    no_show_rate: number | null;
+  };
+  per_day: { date: string; count: number }[];
+  by_type: { type: VisitorType; count: number }[];
+  by_department: { department: string; count: number }[];
+  by_hour: { hour: number; count: number }[];
+}
