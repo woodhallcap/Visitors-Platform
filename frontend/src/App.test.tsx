@@ -174,3 +174,8 @@ test('a from path starting with a backslash is ignored after sign-in', async () 
   await screen.findByRole('heading', { name: 'My visitors' });
   expect(window.location.pathname).toBe('/my-visitors');
 });
+
+test('admins can reach the walk-in booking page from the sidebar', async () => {
+  renderApp('/users', { ...signedInAs(ADMIN), 'GET /users': () => [200, { users: [] }], 'GET /departments': () => [200, { departments: [] }] });
+  expect(await within(await screen.findByRole('navigation', { name: 'Main' })).findByRole('link', { name: 'Book walk-in' })).toBeInTheDocument();
+});

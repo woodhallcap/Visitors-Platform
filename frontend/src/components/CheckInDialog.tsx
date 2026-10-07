@@ -11,9 +11,11 @@ interface CheckInDialogProps {
   visit: Visit;
   onClose: () => void;
   onCheckedIn: (v: Visit) => void;
+  /** Called when the server refuses the check-in (e.g. another desk already did it), so the board can refresh. */
+  onRefused?: () => void;
 }
 
-export function CheckInDialog({ visit, onClose, onCheckedIn }: CheckInDialogProps) {
+export function CheckInDialog({ visit, onClose, onCheckedIn, onRefused }: CheckInDialogProps) {
   const [badge, setBadge] = useState('');
   const [idType, setIdType] = useState('');
   const [idNumber, setIdNumber] = useState('');
@@ -30,7 +32,10 @@ export function CheckInDialog({ visit, onClose, onCheckedIn }: CheckInDialogProp
       onCheckedIn(r.visit);
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fields).length) setErrors(err.fields);
-      else setError(messageOf(err));
+      else {
+        setError(messageOf(err));
+        if (err instanceof ApiError && err.status === 409) onRefused?.();
+      }
     } finally {
       setBusy(false);
     }

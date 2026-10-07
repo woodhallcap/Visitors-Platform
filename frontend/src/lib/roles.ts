@@ -39,6 +39,7 @@ export const NAV: Record<Role, NavItem[]> = {
     { to: '/users', label: 'Users' },
     { to: '/departments', label: 'Departments' },
     { to: '/reception/today', label: 'Today' },
+    { to: '/reception/walk-in', label: 'Book walk-in' },
     { to: '/visits', label: 'All visits' },
     { to: '/it/dashboard', label: 'Dashboard' },
   ],

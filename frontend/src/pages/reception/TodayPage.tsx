@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { CheckInDialog } from '../../components/CheckInDialog';
@@ -54,32 +54,49 @@ export function TodayPage() {
   const today = todayInLagos();
   const day = useVisits(`?date_from=${today}&date_to=${today}`, 30_000);
   const onSite = useVisits('?status=checked_in', 30_000);
+  // Visitors checked out today, including overnight visitors whose visit date was earlier.
+  const gone = useVisits(`?status=checked_out&activity_date=${today}`, 30_000);
+  const checkingOut = useRef(new Set<number>());
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [checkingIn, setCheckingIn] = useState<Visit | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canAct = user?.role === 'reception';
 
   const merged = new Map<number, Visit>();
-  for (const v of [...(day.visits ?? []), ...(onSite.visits ?? [])]) merged.set(v.id, v);
+  for (const v of [...(day.visits ?? []), ...(gone.visits ?? []), ...(onSite.visits ?? [])]) merged.set(v.id, v);
   const visible = [...merged.values()].filter((v) => matchesVisit(v, query));
   const expected = visible.filter((v) => v.status === 'booked' && v.visit_date === today).sort(byArrival);
   const here = visible.filter((v) => v.status === 'checked_in').sort(byArrival);
   const left = visible
-    .filter((v) => v.status === 'checked_out' && v.visit_date === today)
+    .filter((v) => v.status === 'checked_out' && (v.checked_out_at ?? '').startsWith(today))
     .sort((a, b) => (b.checked_out_at ?? '').localeCompare(a.checked_out_at ?? ''));
 
   const applied = (v: Visit) => {
     day.replace(v);
     if (v.status === 'checked_in') onSite.upsert(v);
     else onSite.remove(v.id);
+    if (v.status === 'checked_out') gone.upsert(v);
   };
 
+  /** After a refused action (another desk got there first) the board is stale: fetch it again. */
+  const reloadAll = () => Promise.all([day.reload(), onSite.reload(), gone.reload()]);
+
   const checkOut = async (v: Visit) => {
+    // A ref, not state: a double click fires twice before React re-renders.
+    if (checkingOut.current.has(v.id)) return;
+    checkingOut.current.add(v.id);
+    setBusyId(v.id);
     setError(null);
     try {
       applied((await api<{ visit: Visit }>('POST', `/visits/${v.id}/check-out`)).visit);
     } catch (err) {
       setError(messageOf(err));
+      // Keep the card locked until the fresh board arrives, so a second click can't repeat the refused request.
+      await reloadAll();
+    } finally {
+      checkingOut.current.delete(v.id);
+      setBusyId(null);
     }
   };
 
@@ -88,7 +105,7 @@ export function TodayPage() {
   return (
     <>
       <PageHeader title="Today" description={canAct ? 'Check visitors in when they arrive and out when they leave. Updates every 30 seconds.' : 'Who is expected, on site and gone today. Updates every 30 seconds.'} />
-      {(error || day.error || onSite.error) && <Banner tone="error">{error ?? day.error ?? onSite.error}</Banner>}
+      {(error || day.error || onSite.error || gone.error) && <Banner tone="error" onDismiss={error ? () => setError(null) : undefined}>{error ?? day.error ?? onSite.error ?? gone.error}</Banner>}
       <div className="mb-6 max-w-sm">
         <input aria-label="Search today" placeholder="Search by visitor, company, phone or host" value={query} onChange={(e) => setQuery(e.target.value)} className={inputClass(false)} />
       </div>
@@ -103,7 +120,7 @@ export function TodayPage() {
           </Column>
           <Column title="On site" count={here.length} empty="No visitors on site.">
             {here.map((v) => (
-              <VisitCard key={v.id} visit={v} action={canAct && <Button variant="secondary" aria-label={`Check out ${v.visitor_name}`} onClick={() => checkOut(v)}>Check out</Button>} />
+              <VisitCard key={v.id} visit={v} action={canAct && <Button variant="secondary" aria-label={`Check out ${v.visitor_name}`} disabled={busyId === v.id} onClick={() => checkOut(v)}>Check out</Button>} />
             ))}
           </Column>
           <Column title="Left" count={left.length} empty="No one has left yet.">
@@ -117,6 +134,7 @@ export function TodayPage() {
         <CheckInDialog
           visit={checkingIn}
           onClose={() => setCheckingIn(null)}
+          onRefused={() => void reloadAll()}
           onCheckedIn={(v) => {
             applied(v);
             setCheckingIn(null);

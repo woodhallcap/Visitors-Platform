@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 import { addDays, todayInLagos } from '../../lib/visits';
 import { ADMIN, IT, RECEPTION, makeVisit, renderApp, signedInAs } from '../../test-utils';
 
@@ -14,9 +15,11 @@ const late = makeVisit({ visitor_name: 'Dayo Late', status: 'checked_in', overst
 const yesterdays = makeVisit({ visitor_name: 'Efe Overnight', status: 'checked_in', visit_date: addDays(today, -1), checked_in_at: `${addDays(today, -1)} 18:00:00` });
 const gone = makeVisit({ visitor_name: 'Femi Gone', status: 'checked_out', checked_out_at: `${today} 10:00:00` });
 
+const leftKey = `GET /visits?status=checked_out&activity_date=${today}`;
 const routes = {
   [dayKey]: () => [200, { visits: [expected, early, here, late, gone] }] as [number, unknown],
   [onSiteKey]: () => [200, { visits: [here, late, yesterdays] }] as [number, unknown],
+  [leftKey]: () => [200, { visits: [gone] }] as [number, unknown],
 };
 
 function column(name: string) {
@@ -84,4 +87,48 @@ test.each([['admin', ADMIN], ['IT', IT]])('%s sees the board without check-in or
   await screen.findByText('Ada Expected');
   expect(screen.queryByRole('button', { name: /check in/i })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /check out/i })).not.toBeInTheDocument();
+});
+
+test('a visitor checked in yesterday moves to Left when checked out today', async () => {
+  renderApp('/reception/today', {
+    ...signedInAs(RECEPTION),
+    ...routes,
+    [`POST /visits/${yesterdays.id}/check-out`]: () => [200, { visit: { ...yesterdays, status: 'checked_out', checked_out_at: `${today} 08:10:00` } }],
+  });
+  await userEvent.click(await screen.findByRole('button', { name: 'Check out Efe Overnight' }));
+  expect(await within(column('Left')).findByText('Efe Overnight')).toBeInTheDocument();
+});
+
+test('a check-out another desk already did refreshes the board and is sent only once on a double click', async () => {
+  let checkOuts = 0;
+  let refused = false;
+  const outElsewhere = { ...here, status: 'checked_out' as const, checked_out_at: `${today} 11:55:00` };
+  renderApp('/reception/today', {
+    ...signedInAs(RECEPTION),
+    [dayKey]: () => [200, { visits: refused ? [expected, early, outElsewhere, late, gone] : [expected, early, here, late, gone] }],
+    [onSiteKey]: () => [200, { visits: refused ? [late, yesterdays] : [here, late, yesterdays] }],
+    [leftKey]: () => [200, { visits: refused ? [gone, outElsewhere] : [gone] }],
+    [`POST /visits/${here.id}/check-out`]: () => {
+      checkOuts++;
+      refused = true;
+      return [409, { error: { code: 'conflict', message: 'Only visitors on site can be checked out.' } }];
+    },
+  });
+  await userEvent.dblClick(await screen.findByRole('button', { name: 'Check out Cole Here' }));
+  expect(await screen.findByText('Only visitors on site can be checked out.')).toBeInTheDocument();
+  expect(await within(column('Left')).findByText('Cole Here')).toBeInTheDocument();
+  expect(within(column('On site')).queryByText('Cole Here')).not.toBeInTheDocument();
+  expect(checkOuts).toBe(1);
+});
+
+test('a check-in another desk already did refreshes the board', async () => {
+  const { calls } = renderApp('/reception/today', {
+    ...signedInAs(RECEPTION),
+    ...routes,
+    [`POST /visits/${expected.id}/check-in`]: () => [409, { error: { code: 'conflict', message: 'Only visitors booked for today can be checked in.' } }],
+  });
+  await userEvent.click(await screen.findByRole('button', { name: 'Check in Ada Expected' }));
+  const before = calls.filter((c) => c.method === 'GET' && c.path.startsWith('/visits')).length;
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Check in' }));
+  await vi.waitFor(() => expect(calls.filter((c) => c.method === 'GET' && c.path.startsWith('/visits')).length).toBeGreaterThanOrEqual(before + 3));
 });

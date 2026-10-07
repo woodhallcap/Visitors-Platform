@@ -88,7 +88,8 @@ export function validateVisitForm(v: VisitFormValues, opts: { needsHost: boolean
     else if (TIME_RE.test(v.expected_arrival) && v.expected_departure <= v.expected_arrival) e.expected_departure = 'Departure must be after arrival.';
   }
   if (length(v.purpose) < 3 || length(v.purpose) > 255) e.purpose = 'Enter the purpose of the visit (3–255 characters).';
-  if (!/^\d+$/.test(v.party_size) || Number(v.party_size) > 50) e.party_size = 'Enter a number from 0 to 50.';
+  // Optional with a default of 0 (spec §5): an empty field is fine.
+  if (v.party_size !== '' && (!/^\d+$/.test(v.party_size) || Number(v.party_size) > 50)) e.party_size = 'Enter a number from 0 to 50.';
   return e;
 }
 

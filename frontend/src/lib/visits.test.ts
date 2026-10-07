@@ -79,3 +79,8 @@ test('date and time formatting', () => {
   expect(formatTime('2026-10-07 14:05:00')).toBe('14:05');
   expect(formatTime(null)).toBe('—');
 });
+
+test('an empty accompanying-people field counts as 0', () => {
+  expect(validateVisitForm({ ...valid, party_size: '' }, { needsHost: false, today: '2026-10-07' })).toEqual({});
+  expect(visitPayload({ ...valid, party_size: '' }, false).party_size).toBe(0);
+});
