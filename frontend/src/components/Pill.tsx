@@ -5,6 +5,9 @@ const TONES = {
   accent: 'border-accent bg-accent/40 text-primary',
   muted: 'border-ink/15 bg-cream text-ink/60',
   error: 'border-error/30 bg-error/5 text-error',
+  primary: 'border-primary bg-primary text-white',
+  copper: 'border-copper/40 bg-copper/15 text-copper-dark',
+  struck: 'border-ink/15 bg-cream text-ink/50 line-through',
 };
 
 export function Pill({ children, tone = 'neutral' }: { children: ReactNode; tone?: keyof typeof TONES }) {

@@ -7,3 +7,16 @@ export function formatDateTime(value: string | null): string {
   if (!m) return value;
   return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}, ${m[4]}:${m[5]}`;
 }
+
+export function formatDate(value: string | null): string {
+  if (!value) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return value;
+  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
+}
+
+export function formatTime(value: string | null): string {
+  if (!value) return '—';
+  const m = /(\d{2}):(\d{2})(?::\d{2})?$/.exec(value);
+  return m ? `${m[1]}:${m[2]}` : value;
+}
