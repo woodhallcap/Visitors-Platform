@@ -76,6 +76,7 @@ db_test('every visit field is validated with the spec messages', function () {
         'visitor_email' => 'Enter a valid email address.',
         'visitor_company' => 'Use 120 characters or fewer.',
         'visitor_type' => 'Choose a visitor type.',
+        'visitor_gender' => "Choose the visitor's gender.",
         'visit_date' => 'Enter a valid date.',
         'expected_arrival' => 'Enter the expected arrival time (HH:MM).',
         'expected_departure' => 'Enter a valid time (HH:MM).',
@@ -222,7 +223,7 @@ db_test('overstay is derived from the expected departure', function () {
 db_test('staff edit their own booked visit but cannot move it to another host', function () {
     $staff = make_user('staff');
     $other = make_user('staff');
-    $visit = make_visit(['host_user_id' => $staff['id'], 'visit_date' => tomorrow()]);
+    $visit = make_visit(['host_user_id' => $staff['id'], 'visit_date' => tomorrow(), 'visitor_gender' => 'female']);
     act_as($staff);
     $response = request('PATCH', "/visits/{$visit['id']}", ['visitor_name' => 'Renamed Visitor', 'expected_arrival' => '15:00', 'host_user_id' => $other['id']]);
     assert_status(200, $response);
@@ -246,7 +247,7 @@ db_test("staff cannot see or change another staff member's visit", function () {
 db_test('reception moves a visit to another host and the department follows', function () {
     $legal = make_department('Legal');
     $newHost = make_user('staff', ['department_id' => $legal['id']]);
-    $visit = make_visit(['visit_date' => tomorrow()]);
+    $visit = make_visit(['visit_date' => tomorrow(), 'visitor_gender' => 'male']);
     act_as(make_user('reception'));
     $response = request('PATCH', "/visits/{$visit['id']}", ['host_user_id' => $newHost['id']]);
     assert_status(200, $response);
@@ -370,6 +371,46 @@ db_test('only reception may check visitors in or out', function () {
         assert_status(403, request('POST', "/visits/{$visit['id']}/check-out"));
     }
     assert_equal('booked', visit_find($visit['id'])['status']);
+});
+
+// ---- gender ----
+
+db_test('gender is required, limited to female or male, and returned with the visit', function () {
+    act_as(make_user('staff'));
+    $created = request('POST', '/visits', visit_body(['visitor_gender' => 'male']));
+    assert_status(201, $created);
+    assert_equal('male', $created->body['visit']['visitor_gender']);
+    foreach ([null, '', 'other', 'Female'] as $bad) {
+        $body = visit_body(['visitor_gender' => $bad]);
+        if ($bad === null) {
+            unset($body['visitor_gender']);
+        }
+        $response = request('POST', '/visits', $body);
+        assert_status(422, $response);
+        assert_equal("Choose the visitor's gender.", $response->body['error']['fields']['visitor_gender']);
+    }
+});
+
+db_test('reception walk-ins need a gender too, and edits can change it', function () {
+    $host = make_user('staff');
+    act_as(make_user('reception'));
+    $missing = visit_body(['host_user_id' => $host['id']]);
+    unset($missing['visitor_gender']);
+    assert_status(422, request('POST', '/visits', $missing));
+    $visit = request('POST', '/visits', visit_body(['host_user_id' => $host['id']]))->body['visit'];
+    $edited = request('PATCH', "/visits/{$visit['id']}", ['visitor_gender' => 'male']);
+    assert_status(200, $edited);
+    assert_equal('male', $edited->body['visit']['visitor_gender']);
+});
+
+db_test('an older visit without a gender must be given one when edited', function () {
+    $visit = make_visit(['visit_date' => date('Y-m-d', strtotime('+1 day'))]);
+    assert_equal(null, $visit['visitor_gender']);
+    act_as(make_user('reception'));
+    $response = request('PATCH', "/visits/{$visit['id']}", ['purpose' => 'Updated purpose']);
+    assert_status(422, $response);
+    assert_equal("Choose the visitor's gender.", $response->body['error']['fields']['visitor_gender']);
+    assert_status(200, request('PATCH', "/visits/{$visit['id']}", ['purpose' => 'Updated purpose', 'visitor_gender' => 'female']));
 });
 
 test_summary();

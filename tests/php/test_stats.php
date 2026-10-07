@@ -137,4 +137,25 @@ test_case('csv_cell neutralises formulas but keeps plain numbers', function () {
     assert_equal('"3"', csv_cell(3));
 });
 
+db_test('stats count visitors by gender, with older visits as not recorded', function () {
+    make_visit(['visitor_gender' => 'female']);
+    make_visit(['visitor_gender' => 'female']);
+    make_visit(['visitor_gender' => 'male']);
+    make_visit();
+    make_visit(['visitor_gender' => 'male', 'status' => 'cancelled']);
+    act_as(make_user('it'));
+    assert_equal(
+        [['gender' => 'female', 'count' => 2], ['gender' => 'male', 'count' => 1], ['gender' => 'not_recorded', 'count' => 1]],
+        request('GET', '/stats')->body['by_gender']
+    );
+});
+
+db_test('the CSV export has a Gender column', function () {
+    make_visit(['visitor_gender' => 'male', 'visitor_name' => 'Gendered Visitor']);
+    act_as(make_user('it'));
+    $lines = explode("\r\n", trim(substr(request('GET', '/visits/export.csv')->raw, 3)));
+    assert_true(str_contains($lines[0], '"Type","Gender","Host"'), $lines[0]);
+    assert_true(str_contains($lines[1], '"client","male"'), $lines[1]);
+});
+
 test_summary();

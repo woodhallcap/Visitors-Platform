@@ -77,7 +77,7 @@ $today = date('Y-m-d');
 $tomorrow = date('Y-m-d', strtotime('+1 day'));
 $stamp = date('His') . random_int(100, 999);
 $visit = fn(array $o = []) => array_merge([
-    'visitor_name' => "E2E Visitor {$stamp}", 'visitor_phone' => '08031234567', 'visitor_type' => 'client',
+    'visitor_name' => "E2E Visitor {$stamp}", 'visitor_phone' => '08031234567', 'visitor_type' => 'client', 'visitor_gender' => 'female',
     'visit_date' => $today, 'expected_arrival' => '10:00', 'purpose' => 'End-to-end test',
 ], $o);
 

@@ -8,7 +8,7 @@ fail=0
 need() { grep -qx "visitor/$1" <<<"$LIST" || { echo "MISSING: $1"; fail=1; }; }
 never() { if grep -qE "^visitor/$1" <<<"$LIST"; then echo "MUST NOT SHIP: $1"; fail=1; fi; }
 for f in index.html favicon.svg .htaccess config.php config.local.example.php api/index.php lib/bootstrap.php lib/visits.php lib/stats.php \
-  migrations/001_init.sql migrations/002_indexes.sql migrations/migrate.php scripts/create-it-user.php storage/.htaccess; do
+  migrations/001_init.sql migrations/002_indexes.sql migrations/003_visitor_gender.sql migrations/migrate.php scripts/create-it-user.php storage/.htaccess; do
   need "$f"
 done
 grep -qE '^visitor/assets/index-[^/]+\.js$' <<<"$LIST" || { echo "MISSING: built JS bundle"; fail=1; }

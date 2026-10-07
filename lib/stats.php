@@ -63,6 +63,16 @@ function stats_summary(string $from, string $to): array
     ), 'n', 't');
     $byType = array_map(fn(string $type) => ['type' => $type, 'count' => (int) ($byTypeCounts[$type] ?? 0)], VISITOR_TYPES);
 
+    $byGenderCounts = array_column(db_all(
+        "SELECT COALESCE(visitor_gender, 'not_recorded') AS g, COUNT(*) AS n FROM visits
+         WHERE visit_date BETWEEN ? AND ? AND status <> 'cancelled' GROUP BY COALESCE(visitor_gender, 'not_recorded')",
+        $range
+    ), 'n', 'g');
+    $byGender = array_map(
+        fn(string $gender) => ['gender' => $gender, 'count' => (int) ($byGenderCounts[$gender] ?? 0)],
+        [...VISITOR_GENDERS, 'not_recorded']
+    );
+
     $byDepartment = array_map(
         fn(array $row) => ['department' => $row['department'], 'count' => (int) $row['n']],
         db_all(
@@ -87,6 +97,7 @@ function stats_summary(string $from, string $to): array
         'cards' => $cards,
         'per_day' => $perDay,
         'by_type' => $byType,
+        'by_gender' => $byGender,
         'by_department' => $byDepartment,
         'by_hour' => $byHour,
     ];
@@ -101,6 +112,7 @@ const CSV_COLUMNS = [
     'Email' => 'visitor_email',
     'Company' => 'visitor_company',
     'Type' => 'visitor_type',
+    'Gender' => 'visitor_gender',
     'Host' => 'host_name',
     'Department' => 'department_name',
     'Purpose' => 'purpose',

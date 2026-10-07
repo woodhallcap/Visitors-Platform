@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 const DEMO_LIVE_SITE = 'https://visitor.woodhallcap.com';
 const DEMO_DEPARTMENTS = ['Finance', 'Legal', 'Operations'];
+const DEMO_GENDERS = ['Adaeze Nwosu' => 'female', 'Musa Bello' => 'male', 'Tolu Adeyemi' => 'male', 'Grace Okon' => 'female', 'Ifeanyi Obi' => 'male', 'Fatima Sani' => 'female', 'Chuka Eze' => 'male', 'Ngozi Lawal' => 'female', 'Samuel Ade' => 'male'];
 const DEMO_ACCOUNTS = [
     ['role' => 'it', 'full_name' => 'Demo IT', 'email' => 'demo-it@example.test', 'department' => null],
     ['role' => 'admin', 'full_name' => 'Demo Admin', 'email' => 'demo-admin@example.test', 'department' => null],
@@ -75,6 +76,7 @@ function demo_seed(string $password): array
                 'visitor_phone' => '0803' . random_int(1000000, 9999999),
                 'visitor_company' => $company,
                 'visitor_type' => $type,
+                'visitor_gender' => DEMO_GENDERS[$name],
                 'host_user_id' => $host['host'],
                 'department_id' => $host['dept'],
                 'booked_by_user_id' => $channel === 'reception' ? $reception : $host['host'],

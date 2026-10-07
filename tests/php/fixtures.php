@@ -82,6 +82,7 @@ function visit_body(array $o = []): array
         'visitor_email' => 'tola@acme.example',
         'visitor_company' => 'Acme Ltd',
         'visitor_type' => 'client',
+        'visitor_gender' => 'female',
         'visit_date' => date('Y-m-d', strtotime('+1 day')),
         'expected_arrival' => '10:30',
         'expected_departure' => '11:30',

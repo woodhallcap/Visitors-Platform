@@ -85,6 +85,7 @@ function validate_user(array $input): array
 }
 
 const VISITOR_TYPES = ['client', 'vendor', 'interviewee', 'contractor', 'guest'];
+const VISITOR_GENDERS = ['female', 'male'];
 
 function validate_time(mixed $value): ?string
 {
@@ -131,6 +132,11 @@ function validate_visit(array $input): array
         $errors['visitor_type'] = 'Choose a visitor type.';
     }
 
+    $gender = $input['visitor_gender'] ?? '';
+    if (!in_array($gender, VISITOR_GENDERS, true)) {
+        $errors['visitor_gender'] = "Choose the visitor's gender.";
+    }
+
     $date = validate_date($input['visit_date'] ?? null);
     if ($date === null) {
         $errors['visit_date'] = 'Enter a valid date.';
@@ -173,6 +179,7 @@ function validate_visit(array $input): array
         'visitor_email' => $email === '' ? null : $email,
         'visitor_company' => $company === '' ? null : $company,
         'visitor_type' => $type,
+        'visitor_gender' => $gender,
         'visit_date' => $date,
         'expected_arrival' => $arrival,
         'expected_departure' => $departure,
