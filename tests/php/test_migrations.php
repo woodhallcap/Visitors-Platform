@@ -45,4 +45,11 @@ db_test('unique keys ignore case', function () {
     }
 });
 
+test_case('visit indexes for status sweeps and check-in/out times exist', function () {
+    $names = array_column(db_all("SELECT DISTINCT index_name AS i FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'visits'"), 'i');
+    foreach (['idx_visits_status_date', 'idx_visits_checked_in_at', 'idx_visits_checked_out_at'] as $index) {
+        assert_true(in_array($index, $names, true), "missing index {$index}");
+    }
+});
+
 test_summary();
