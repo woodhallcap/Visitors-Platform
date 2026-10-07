@@ -68,7 +68,19 @@ function user_create(array $input, ?array $actor): array
     return user_find($id);
 }
 
+/**
+ * Locks the row first so a concurrent change (e.g. IT promoting this user) commits before we read it:
+ * the permission check then sees the current role, never a stale one.
+ */
 function user_update(int $id, array $input, array $actor): array
+{
+    return db_transaction(function () use ($id, $input, $actor) {
+        db_one('SELECT id FROM users WHERE id = ? FOR UPDATE', [$id]);
+        return user_update_locked($id, $input, $actor);
+    });
+}
+
+function user_update_locked(int $id, array $input, array $actor): array
 {
     $existing = user_find($id) ?? throw HttpError::notFound('User not found.');
     $merged = array_intersect_key($existing, array_flip(USER_EDITABLE_FIELDS));

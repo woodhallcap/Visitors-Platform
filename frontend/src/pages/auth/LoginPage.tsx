@@ -21,7 +21,7 @@ export function LoginPage() {
   if (status === 'signed-in' && user) {
     const from = (location.state as { from?: string } | null)?.from;
     // Only same-site paths: '//host' would be a protocol-relative redirect off site.
-    const safe = from && /^\/(?!\/)/.test(from) && from !== '/login';
+    const safe = from && /^\/(?![/\\])/.test(from) && from !== '/login';
     return <Navigate to={safe ? from : homeFor(user.role)} replace />;
   }
 

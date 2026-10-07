@@ -166,3 +166,14 @@ test('set-password without a token explains the link is incomplete', async () =>
   renderApp('/set-password', signedOut);
   expect(await screen.findByRole('heading', { name: 'Link incomplete' })).toBeInTheDocument();
 });
+
+test('a from path starting with a backslash is ignored after sign-in', async () => {
+  mockFetch({ ...signedOut, 'POST /auth/login': () => [200, { user: STAFF, csrf_token: 'tok' }] });
+  window.history.pushState({ usr: { from: '/\\evil.example' }, key: 'b', idx: 0 }, '', '/login');
+  render(<App />);
+  await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
+  await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
+  await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  await screen.findByRole('link', { name: 'Book a visitor' });
+  expect(window.location.pathname).toBe('/my-visitors');
+});

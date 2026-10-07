@@ -57,3 +57,20 @@ function is_duplicate_key(PDOException $e): bool
 {
     return ($e->errorInfo[1] ?? null) === 1062;
 }
+
+/** Runs $fn in a transaction: commits on success, rolls back and rethrows on any error. */
+function db_transaction(callable $fn): mixed
+{
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $result = $fn();
+        $pdo->commit();
+        return $result;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}

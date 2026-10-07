@@ -219,4 +219,26 @@ db_test('reset-link refuses a disabled user', function () {
     assert_equal('Enable this user before creating a set-password link.', $response->body['error']['message']);
 });
 
+db_test('a failed user update rolls back and leaves no open transaction', function () {
+    $target = make_user('security');
+    act_as(make_user('admin'));
+    assert_status(422, request('PATCH', "/users/{$target['id']}", ['email' => 'not-an-email']));
+    assert_equal(false, db()->inTransaction());
+    assert_status(200, request('PATCH', "/users/{$target['id']}", ['full_name' => 'Still Works']));
+});
+
+test_case('db_transaction commits on success and rolls back on error', function () {
+    reset_tables();
+    db_transaction(fn() => db_exec("INSERT INTO departments (name) VALUES ('Kept')"));
+    try {
+        db_transaction(function () {
+            db_exec("INSERT INTO departments (name) VALUES ('Dropped')");
+            throw new RuntimeException('boom');
+        });
+    } catch (RuntimeException $e) {
+    }
+    assert_equal(['Kept'], array_column(db_all('SELECT name FROM departments'), 'name'));
+    assert_equal(false, db()->inTransaction());
+});
+
 test_summary();
