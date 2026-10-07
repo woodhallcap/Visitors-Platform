@@ -54,4 +54,50 @@ db_test('the demo seed leaves real users and their visits alone', function () {
     assert_true(user_find($real['id']) !== null, 'real user deleted');
 });
 
+/** Runs a generated SQL script the way phpMyAdmin would: one statement at a time. */
+function run_sql_script(string $sql): void
+{
+    $sql = (string) preg_replace('/^\s*--.*$/m', '', $sql);
+    foreach (preg_split('/;\s*\n/', $sql) as $statement) {
+        if (trim($statement) !== '') {
+            db()->exec($statement);
+        }
+    }
+}
+
+db_test('the phpMyAdmin seed script creates the same demo data as demo_seed, in Lagos time', function () {
+    $sql = demo_seed_sql('A-Long-Random-Password-42');
+    assert_true(str_starts_with(ltrim(preg_replace('/^--.*\n/m', '', $sql)), "SET time_zone = '+01:00'"), 'must pin Lagos time');
+    assert_true(!str_contains($sql, 'A-Long-Random-Password-42'), 'plaintext password in SQL');
+    run_sql_script($sql);
+    db()->exec("SET time_zone = '+01:00'");
+    foreach (DEMO_ACCOUNTS as $account) {
+        $hash = db_one('SELECT password_hash FROM users WHERE email = ?', [$account['email']])['password_hash'];
+        assert_true(password_verify('A-Long-Random-Password-42', $hash), $account['email']);
+    }
+    visits_sweep_no_shows();
+    $statuses = array_column(db_all('SELECT DISTINCT status FROM visits'), 'status');
+    sort($statuses);
+    assert_equal(['booked', 'cancelled', 'checked_in', 'checked_out', 'no_show'], $statuses);
+    assert_equal(count(demo_visit_specs()), db_one('SELECT COUNT(*) AS n FROM visits')['n']);
+    assert_equal(0, db_one('SELECT COUNT(*) AS n FROM visits WHERE visitor_gender IS NULL')['n']);
+    run_sql_script($sql);
+    assert_equal(count(demo_visit_specs()), db_one('SELECT COUNT(*) AS n FROM visits')['n'], 're-running must not duplicate');
+});
+
+db_test('the removal script deletes demo data and leaves real data alone', function () {
+    $real = make_user('staff', ['email' => 'real.person@woodhallcap.com']);
+    $realVisit = make_visit(['host_user_id' => $real['id']]);
+    run_sql_script(demo_seed_sql('A-Long-Random-Password-42'));
+    $receptionId = db_one("SELECT id FROM users WHERE email = 'demo-reception@example.test'")['id'];
+    db_exec("UPDATE visits SET status = 'checked_in', checked_in_by = ? WHERE id = ?", [$receptionId, $realVisit['id']]);
+    run_sql_script(demo_remove_sql());
+    assert_equal(0, db_one("SELECT COUNT(*) AS n FROM users WHERE email LIKE '%@example.test'")['n']);
+    assert_true(user_find($real['id']) !== null, 'real user removed');
+    assert_true(visit_find($realVisit['id']) !== null, 'real visit removed');
+    assert_equal(null, visit_find($realVisit['id'])['checked_in_by'], 'reference to a demo user must be cleared');
+    assert_equal(0, db_one("SELECT COUNT(*) AS n FROM departments WHERE name IN ('Legal', 'Operations')")['n']);
+    assert_equal(1, db_one('SELECT COUNT(*) AS n FROM departments WHERE id = ?', [$real['department_id']])['n'], 'a department in real use must stay');
+});
+
 test_summary();
