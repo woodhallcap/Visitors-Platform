@@ -86,4 +86,21 @@ test_case('handlers receive body, query, params and ip', function () {
     assert_equal(['id' => 5, 'body' => ['a' => 1], 'query' => ['q' => 'x'], 'ip' => '10.1.2.3'], $response->body);
 });
 
+test_case('ensure_private_dir creates a 0700 directory and is quiet when it exists', function () {
+    $dir = sys_get_temp_dir() . '/visitor-test-' . bin2hex(random_bytes(4)) . '/nested';
+    assert_true(ensure_private_dir($dir));
+    assert_equal('0700', substr(sprintf('%o', fileperms($dir)), -4));
+    assert_true(ensure_private_dir($dir));
+    rmdir($dir);
+    rmdir(dirname($dir));
+});
+
+test_case('a Response can carry a raw body with headers', function () {
+    $router = new Router();
+    $router->add('GET', '/file.csv', fn() => new Response(200, [], "a,b\r\n", ['Content-Type' => 'text/csv']), ['public' => true]);
+    $response = handle_request('GET', '/file.csv', [], [], [], '', $router);
+    assert_equal("a,b\r\n", $response->raw);
+    assert_equal(['Content-Type' => 'text/csv'], $response->headers);
+});
+
 test_summary();

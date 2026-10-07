@@ -107,8 +107,10 @@ function visits_list(array $query, array $viewer): array
         $params[] = $to;
     }
     if ($day = visit_query_date($query, 'activity_date')) {
-        $where[] = '(DATE(v.checked_in_at) = ? OR DATE(v.checked_out_at) = ?)';
-        array_push($params, $day, $day);
+        // Ranges instead of DATE(column) so the check-in/out indexes are used.
+        $next = date('Y-m-d', strtotime($day . ' +1 day'));
+        $where[] = '((v.checked_in_at >= ? AND v.checked_in_at < ?) OR (v.checked_out_at >= ? AND v.checked_out_at < ?))';
+        array_push($params, $day, $next, $day, $next);
     }
     $status = $query['status'] ?? '';
     if (is_string($status) && $status !== '') {

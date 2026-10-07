@@ -12,6 +12,8 @@
   --color-cream: #f6f5f2;
   --color-ink: #161616;
   --color-error: #b3261e;
+  /* Single-series chart bars: a saturated copper (passes the dataviz lightness/chroma/contrast checks on white). */
+  --color-chart: #b56a38;
   --font-heading: 'Work Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-body: 'Work Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --radius-brand: 28px;

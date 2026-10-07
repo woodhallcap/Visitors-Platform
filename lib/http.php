@@ -53,7 +53,8 @@ final class Request
 
 final class Response
 {
-    public function __construct(public int $status, public array $body)
+    /** When $raw is set it is sent as-is with $headers instead of JSON-encoding $body (e.g. a CSV download). */
+    public function __construct(public int $status, public array $body, public ?string $raw = null, public array $headers = [])
     {
     }
 }
@@ -71,4 +72,14 @@ function request_headers(): array
         }
     }
     return $headers;
+}
+
+/** Creates $dir (0700) if missing. Quiet when another request created it first; logs if it cannot be created. */
+function ensure_private_dir(string $dir): bool
+{
+    if (is_dir($dir) || @mkdir($dir, 0700, true) || is_dir($dir)) {
+        return true;
+    }
+    error_log("[visitor] cannot create directory {$dir}");
+    return false;
 }

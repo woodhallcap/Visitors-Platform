@@ -1,0 +1,38 @@
+# Woodhall Capital Visitor Management — Apache config for the subdomain's document root.
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Always HTTPS.
+  RewriteCond %{HTTPS} off
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # Server code, configuration, migrations, scripts and private storage are never served.
+  RewriteRule ^(lib|migrations|scripts|storage|tests|docs|vendor)(/|$) - [F,L]
+  RewriteRule ^config(\.local|\.local\.example)?\.php$ - [F,L]
+  # Dotfiles, except /.well-known (needed for SSL certificate renewal).
+  RewriteRule (^|/)\.(?!well-known/) - [F,L]
+
+  # The JSON API.
+  RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
+
+  # Anything else that is not a real file is a front-end route.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "^index-.*\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
