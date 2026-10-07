@@ -179,3 +179,16 @@ test('admins can reach the walk-in booking page from the sidebar', async () => {
   renderApp('/users', { ...signedInAs(ADMIN), 'GET /users': () => [200, { users: [] }], 'GET /departments': () => [200, { departments: [] }] });
   expect(await within(await screen.findByRole('navigation', { name: 'Main' })).findByRole('link', { name: 'Book walk-in' })).toBeInTheDocument();
 });
+
+test.each([
+  ['sign-in', '/login', 'Sign in'],
+  ['set-password', '/set-password?token=abc', 'Set your password'],
+])('the %s page is a full-screen split with the office photo and logo', async (_label, path, heading) => {
+  renderApp(path, signedOut);
+  await screen.findByRole('heading', { name: heading, level: 2 });
+  const photo = screen.getByTestId('auth-photo');
+  expect(photo.querySelector('img')).toHaveAttribute('alt', '');
+  expect(within(photo).getByRole('img', { name: 'Woodhall Capital' })).toBeInTheDocument();
+  expect(screen.getByTestId('auth-layout').className).toMatch(/min-h-dvh/);
+  expect(screen.getByTestId('auth-layout').className).toMatch(/overflow-x-hidden/);
+});
