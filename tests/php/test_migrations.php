@@ -52,4 +52,11 @@ test_case('visit indexes for status sweeps and check-in/out times exist', functi
     }
 });
 
+test_case('visits have a nullable visitor_gender column limited to female and male', function () {
+    $column = db_one("SELECT column_type AS t, is_nullable AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'visits' AND column_name = 'visitor_gender'");
+    assert_true($column !== null, 'visitor_gender column missing');
+    assert_equal("enum('female','male')", $column['t']);
+    assert_equal('YES', $column['n']);
+});
+
 test_summary();

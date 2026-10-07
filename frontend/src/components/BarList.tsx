@@ -1,15 +1,18 @@
 interface BarListProps {
   title: string;
+  /** A one-line takeaway under the title. */
+  summary?: string;
   data: { label: string; value: number }[];
   empty: string;
 }
 
 /** Horizontal bars with the label above and the value at the tip; every value is visible, so no tooltip is needed. */
-export function BarList({ title, data, empty }: BarListProps) {
+export function BarList({ title, summary, data, empty }: BarListProps) {
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
     <section className="rounded-brand bg-white p-5 shadow-card sm:p-6">
-      <h2 className="mb-4 text-xl">{title}</h2>
+      <h2 className={`text-xl ${summary ? 'mb-1' : 'mb-4'}`}>{title}</h2>
+      {summary && <p className="mb-4 text-sm text-ink/60">{summary}</p>}
       {data.length === 0 ? (
         <p className="mb-0 text-sm text-ink/60">{empty}</p>
       ) : (

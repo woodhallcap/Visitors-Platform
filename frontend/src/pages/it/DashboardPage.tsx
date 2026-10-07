@@ -9,10 +9,19 @@ import { StatCard } from '../../components/StatCard';
 import { TextInput } from '../../components/TextInput';
 import { ApiError, api, messageOf } from '../../lib/api';
 import { formatDate, formatDuration, formatPercent, formatShortDate } from '../../lib/format';
-import { VISITOR_TYPE_LABELS, addDays, todayInLagos, visitsQuery } from '../../lib/visits';
+import { VISITOR_GENDER_LABELS, VISITOR_TYPE_LABELS, addDays, todayInLagos, visitsQuery } from '../../lib/visits';
 import type { Stats } from '../../types';
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+/** "Female 42% · Male 58% of recorded visits", or undefined when no visit has a gender yet. */
+function genderSummary(byGender: Stats['by_gender']): string | undefined {
+  const count = (g: string) => byGender.find((x) => x.gender === g)?.count ?? 0;
+  const recorded = count('female') + count('male');
+  if (recorded === 0) return undefined;
+  const female = Math.round((count('female') / recorded) * 100);
+  return `Female ${female}% · Male ${100 - female}% of recorded visits`;
+}
 const MAX_DAYS = 366;
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
 
@@ -103,8 +112,16 @@ export function DashboardPage() {
                   data={stats.per_day.map((d) => ({ label: formatShortDate(d.date), value: d.count, tooltip: `${formatDate(d.date)} · ${d.count} ${d.count === 1 ? 'visit' : 'visits'}` }))}
                 />
               </div>
-              <BarList title="By visitor type" data={stats.by_type.map((t) => ({ label: VISITOR_TYPE_LABELS[t.type], value: t.count }))} empty="No visits yet." />
-              <BarList title="Top departments" data={stats.by_department.map((d) => ({ label: d.department, value: d.count }))} empty="No visits yet." />
+              <div className="grid gap-5 lg:col-span-2 lg:grid-cols-3">
+                <BarList title="By visitor type" data={stats.by_type.map((t) => ({ label: VISITOR_TYPE_LABELS[t.type], value: t.count }))} empty="No visits yet." />
+                <BarList
+                  title="By gender"
+                  summary={genderSummary(stats.by_gender)}
+                  data={stats.by_gender.filter((g) => g.gender !== 'not_recorded' || g.count > 0).map((g) => ({ label: VISITOR_GENDER_LABELS[g.gender], value: g.count }))}
+                  empty="No visits yet."
+                />
+                <BarList title="Top departments" data={stats.by_department.map((d) => ({ label: d.department, value: d.count }))} empty="No visits yet." />
+              </div>
               <div className="lg:col-span-2">
                 <ColumnChart
                   title="Arrivals by hour"

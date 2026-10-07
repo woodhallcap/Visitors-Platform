@@ -35,6 +35,13 @@ cd frontend && npm install && npm run dev
 
 Open the link from step 2, set a password, then sign in at http://localhost:5173.
 
+### Demo accounts for testing
+
+`php scripts/seed-demo.php` creates one account per role (IT, admin, reception, security, two staff) and sample visits
+in every state. The shared password is written to `storage/demo-accounts.txt` (git-ignored). It refuses to run when
+`site_url` is the live site. `php tests/e2e/run.php` then walks every role through the platform against the running API,
+and [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) lists the screens to click through.
+
 ### Configuration
 
 `config.php` holds defaults. Put real values in `config.local.php` (git-ignored), which returns an array merged

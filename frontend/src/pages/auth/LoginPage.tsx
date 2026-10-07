@@ -45,9 +45,11 @@ export function LoginPage() {
 
   return (
     <AuthLayout title="Welcome" text="Book visitors, check them in and see who's on site. Sign in with the account your administrator set up for you.">
-      <h2>Sign in</h2>
+      <p className="mb-2 text-xs font-semibold tracking-[0.16em] text-copper-dark uppercase">Staff portal</p>
+      <h2 className="mb-2 text-[2rem]">Sign in</h2>
+      <p className="mb-6 text-ink/70">Use the email and password your administrator set up for you.</p>
       {error && <Banner tone="error">{error}</Banner>}
-      <form onSubmit={submit} noValidate className="max-w-md">
+      <form onSubmit={submit} noValidate>
         <TextInput label="Email" name="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} error={fieldErrors.email} autoFocus />
         <TextInput label="Password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} error={fieldErrors.password} />
         <Button type="submit" arrow disabled={busy}>

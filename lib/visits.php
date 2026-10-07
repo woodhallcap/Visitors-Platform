@@ -68,11 +68,11 @@ function visit_create(array $input, array $actor): array
     $isStaff = $actor['role'] === 'staff';
     [$data, $host] = visit_validate_with_host($input, $isStaff ? $actor['id'] : ($input['host_user_id'] ?? null));
     $id = db_insert(
-        'INSERT INTO visits (visitor_name, visitor_phone, visitor_email, visitor_company, visitor_type, host_user_id,
+        'INSERT INTO visits (visitor_name, visitor_phone, visitor_email, visitor_company, visitor_type, visitor_gender, host_user_id,
             department_id, booked_by_user_id, channel, visit_date, expected_arrival, expected_departure, purpose, party_size)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
-            $data['visitor_name'], $data['visitor_phone'], $data['visitor_email'], $data['visitor_company'], $data['visitor_type'],
+            $data['visitor_name'], $data['visitor_phone'], $data['visitor_email'], $data['visitor_company'], $data['visitor_type'], $data['visitor_gender'],
             $host['id'], $host['department_id'], $actor['id'], $isStaff ? 'staff' : 'reception',
             $data['visit_date'], $data['expected_arrival'], $data['expected_departure'], $data['purpose'], $data['party_size'],
         ]
@@ -140,7 +140,7 @@ function hosts_list(): array
     );
 }
 
-const VISIT_EDITABLE_FIELDS = ['visitor_name', 'visitor_phone', 'visitor_email', 'visitor_company', 'visitor_type',
+const VISIT_EDITABLE_FIELDS = ['visitor_name', 'visitor_phone', 'visitor_email', 'visitor_company', 'visitor_type', 'visitor_gender',
     'visit_date', 'expected_arrival', 'expected_departure', 'purpose', 'party_size'];
 
 /** Staff may only act on visits they host; to them, anyone else's visit does not exist. */
@@ -185,11 +185,11 @@ function visit_update(int $id, array $input, array $actor): array
     $departmentId = $host['id'] === $visit['host_user_id'] ? $visit['department_id'] : $host['department_id'];
 
     $changed = db_exec(
-        'UPDATE visits SET visitor_name = ?, visitor_phone = ?, visitor_email = ?, visitor_company = ?, visitor_type = ?,
+        'UPDATE visits SET visitor_name = ?, visitor_phone = ?, visitor_email = ?, visitor_company = ?, visitor_type = ?, visitor_gender = ?,
             host_user_id = ?, department_id = ?, visit_date = ?, expected_arrival = ?, expected_departure = ?, purpose = ?, party_size = ?
          WHERE id = ? AND status = ?',
         [
-            $data['visitor_name'], $data['visitor_phone'], $data['visitor_email'], $data['visitor_company'], $data['visitor_type'],
+            $data['visitor_name'], $data['visitor_phone'], $data['visitor_email'], $data['visitor_company'], $data['visitor_type'], $data['visitor_gender'],
             $host['id'], $departmentId, $data['visit_date'], $data['expected_arrival'], $data['expected_departure'],
             $data['purpose'], $data['party_size'], $id, 'booked',
         ]

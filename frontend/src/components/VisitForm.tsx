@@ -2,10 +2,10 @@ import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { ApiError, messageOf } from '../lib/api';
 import type { FieldErrors } from '../lib/validation';
 import {
-  VISITOR_TYPE_LABELS, emptyVisitForm, todayInLagos, validateVisitForm, visitPayload, visitToForm,
+  VISITOR_GENDER_LABELS, VISITOR_TYPE_LABELS, emptyVisitForm, todayInLagos, validateVisitForm, visitPayload, visitToForm,
   type VisitFormValues, type VisitPayload,
 } from '../lib/visits';
-import { VISITOR_TYPES, type Host, type Visit } from '../types';
+import { VISITOR_GENDERS, VISITOR_TYPES, type Host, type Visit } from '../types';
 import { Banner } from './Banner';
 import { Button } from './Button';
 import { SelectInput } from './SelectInput';
@@ -67,6 +67,14 @@ export function VisitForm({ initial, hosts, defaults, submitLabel, onSubmit, onC
           {VISITOR_TYPES.map((type) => (
             <option key={type} value={type}>
               {VISITOR_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </SelectInput>
+        <SelectInput label="Gender" name="visitor_gender" value={values.visitor_gender} onChange={set('visitor_gender')} error={errors.visitor_gender}>
+          <option value="">Choose</option>
+          {VISITOR_GENDERS.map((gender) => (
+            <option key={gender} value={gender}>
+              {VISITOR_GENDER_LABELS[gender]}
             </option>
           ))}
         </SelectInput>
