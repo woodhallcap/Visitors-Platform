@@ -1,6 +1,5 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
 import { addDays, todayInLagos } from '../../lib/visits';
 import { ADMIN, RECEPTION, STAFF, makeVisit, renderApp, signedInAs } from '../../test-utils';
 
@@ -56,8 +55,7 @@ test('reception books a walk-in for a chosen host and returns to Today', async (
     'POST /visits': () => [201, { visit: makeVisit() }],
     'GET /visits': () => [200, { visits: [] }],
   });
-  await screen.findByRole('heading', { name: 'Book a walk-in' });
-  expect(screen.getByLabelText('Visit date')).toHaveValue(today);
+  expect(await screen.findByLabelText('Visit date')).toHaveValue(today);
   expect(screen.getByLabelText('Expected arrival')).not.toHaveValue('');
   await userEvent.type(screen.getByLabelText("Visitor's full name"), 'Tola Ade');
   await userEvent.type(screen.getByLabelText('Phone'), '08031234567');
@@ -65,7 +63,8 @@ test('reception books a walk-in for a chosen host and returns to Today', async (
   await userEvent.selectOptions(screen.getByLabelText('Person being visited'), '2');
   await userEvent.type(screen.getByLabelText('Purpose of visit'), 'Delivery');
   await userEvent.click(screen.getByRole('button', { name: 'Book walk-in' }));
-  await vi.waitFor(() => expect(window.location.pathname).toBe('/reception/today'));
+  await screen.findByRole('heading', { name: 'Today' });
+  expect(window.location.pathname).toBe('/reception/today');
   expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ host_user_id: 2, visitor_type: 'vendor', visit_date: today });
 });
 

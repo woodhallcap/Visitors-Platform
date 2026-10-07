@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { HomeRedirect, RequireAuth, RequireRole } from './components/guards';
 import { AuthProvider } from './lib/auth';
 import { ComingSoon } from './pages/ComingSoon';
+import { TodayPage } from './pages/reception/TodayPage';
 import { WalkInPage } from './pages/reception/WalkInPage';
 import { BookVisitorPage } from './pages/staff/BookVisitorPage';
 import { MyVisitorsPage } from './pages/staff/MyVisitorsPage';
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="book" element={<RequireRole roles={['staff']}><BookVisitorPage /></RequireRole>} />
             <Route path="my-visitors" element={<RequireRole roles={['staff']}><MyVisitorsPage /></RequireRole>} />
             <Route path="reception/walk-in" element={<RequireRole roles={['reception', 'admin']}><WalkInPage /></RequireRole>} />
+            <Route path="reception/today" element={<RequireRole roles={['reception', 'admin', 'it']}><TodayPage /></RequireRole>} />
             <Route path="*" element={<ComingSoon />} />
           </Route>
         </Routes>
