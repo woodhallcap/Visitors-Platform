@@ -1,12 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { SessionPayload, User } from '../types';
-import { api, onUnauthenticated, setCsrfToken } from './api';
+import { ApiError, api, onUnauthenticated, setCsrfToken } from './api';
 
 type Status = 'loading' | 'signed-out' | 'signed-in';
+/** Why the session ended: a deliberate sign-out, or the server dropping it (expiry, disabled account, signed out elsewhere). */
+export type EndedBy = 'logout' | 'expired' | null;
 
 interface AuthContextValue {
   status: Status;
   user: User | null;
+  endedBy: EndedBy;
   login(email: string, password: string): Promise<void>;
   logout(): Promise<void>;
 }
@@ -14,25 +17,25 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ status: Status; user: User | null }>({ status: 'loading', user: null });
+  const [state, setState] = useState<{ status: Status; user: User | null; endedBy: EndedBy }>({ status: 'loading', user: null, endedBy: null });
 
   const signIn = useCallback((session: SessionPayload) => {
     setCsrfToken(session.csrf_token);
-    setState({ status: 'signed-in', user: session.user });
+    setState({ status: 'signed-in', user: session.user, endedBy: null });
   }, []);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback((endedBy: Exclude<EndedBy, null>) => {
     setCsrfToken(null);
-    setState({ status: 'signed-out', user: null });
+    setState({ status: 'signed-out', user: null, endedBy });
   }, []);
 
-  useEffect(() => onUnauthenticated(signOut), [signOut]);
+  useEffect(() => onUnauthenticated(() => signOut('expired')), [signOut]);
 
   useEffect(() => {
     let cancelled = false;
     api<SessionPayload>('GET', '/auth/me')
       .then((session) => !cancelled && signIn(session))
-      .catch(() => !cancelled && signOut());
+      .catch(() => !cancelled && signOut('expired'));
     return () => {
       cancelled = true;
     };
@@ -48,11 +51,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await api('POST', '/auth/logout');
-    } catch {
-      // The session is gone either way.
+    } catch (err) {
+      if (!(err instanceof ApiError && err.code === 'unauthenticated')) {
+        // The request failed, so only believe the session is gone if the server says so.
+        try {
+          signIn(await api<SessionPayload>('GET', '/auth/me'));
+          return;
+        } catch (meErr) {
+          if (!(meErr instanceof ApiError && meErr.code === 'unauthenticated')) return;
+        }
+      }
     }
-    signOut();
-  }, [signOut]);
+    signOut('logout');
+  }, [signIn, signOut]);
 
   const value = useMemo(() => ({ ...state, login, logout }), [state, login, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

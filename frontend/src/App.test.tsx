@@ -1,7 +1,8 @@
-import { screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import App from './App';
 import { api } from './lib/api';
-import { ADMIN, IT, STAFF, renderApp, signedInAs, signedOut } from './test-utils';
+import { ADMIN, IT, STAFF, mockFetch, renderApp, signedInAs, signedOut } from './test-utils';
 
 test('signed-out visitors are sent to sign in', async () => {
   renderApp('/users', signedOut);
@@ -77,6 +78,48 @@ test('signing out returns to the sign-in page', async () => {
   await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
   expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   expect(calls.find((c) => c.path === '/auth/logout')?.headers['X-CSRF-Token']).toBe('tok');
+});
+
+test('a failed sign-out request that leaves the session alive keeps the user signed in', async () => {
+  renderApp('/my-visitors', {
+    ...signedInAs(STAFF),
+    'POST /auth/logout': () => [500, { error: { code: 'server_error', message: 'Boom.' } }],
+  });
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+  await screen.findByRole('link', { name: 'Book a visitor' });
+  expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument();
+});
+
+test('after an explicit sign-out the next user does not land on the previous page', async () => {
+  let signedIn = true;
+  renderApp('/users', {
+    'GET /auth/me': () => (signedIn ? [200, { user: ADMIN, csrf_token: 'tok' }] : [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }]),
+    'POST /auth/logout': () => {
+      signedIn = false;
+      return [200, { ok: true }];
+    },
+    'POST /auth/login': () => [200, { user: STAFF, csrf_token: 'tok2' }],
+  });
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+  await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
+  await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
+  await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  expect(await screen.findByRole('link', { name: 'Book a visitor' })).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/my-visitors');
+  expect(screen.queryByRole('heading', { name: 'No access' })).not.toBeInTheDocument();
+});
+
+test('a crafted redirect target that leaves the site is ignored after sign-in', async () => {
+  mockFetch({ ...signedOut, 'POST /auth/login': () => [200, { user: STAFF, csrf_token: 'tok' }] });
+  window.history.pushState({ usr: { from: '//evil.example' }, key: 'k', idx: 0 }, '', '/login');
+  render(<App />);
+  await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
+  await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
+  await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  await screen.findByRole('link', { name: 'Book a visitor' });
+  expect(window.location.pathname).toBe('/my-visitors');
+  expect(window.location.host).not.toBe('evil.example');
 });
 
 test('a session that expires mid-use returns to sign in', async () => {

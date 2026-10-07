@@ -7,7 +7,7 @@ import type { Role } from '../types';
 import { AppShell } from './AppShell';
 
 export function RequireAuth() {
-  const { status } = useAuth();
+  const { status, endedBy } = useAuth();
   const location = useLocation();
   if (status === 'loading') {
     return (
@@ -17,7 +17,7 @@ export function RequireAuth() {
     );
   }
   if (status === 'signed-out') {
-    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+    return <Navigate to="/login" replace state={endedBy === 'logout' ? undefined : { from: location.pathname + location.search }} />;
   }
   return (
     <AppShell>
