@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Woodhall Capital: primary is the logo brown; the rest carries over from the KYC form. */
+  --color-primary: #3c2219;
+  --color-primary-dark: #2a1711;
+  --color-accent: #d0c5b0;
+  --color-copper: #b48569;
+  --color-copper-dark: #8f6048;
+  --color-bg: #f8f3f0;
+  --color-bg-alt: #efe8e1;
+  --color-cream: #f6f5f2;
+  --color-ink: #161616;
+  --color-error: #b3261e;
+  --font-heading: 'Work Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Work Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius-brand: 28px;
+  --shadow-card: 0 18px 50px rgba(60, 34, 25, 0.09);
+}
+
+@layer base {
+  body { @apply bg-bg font-body text-ink m-0 min-h-screen text-base; }
+  h1, h2, h3 { @apply font-heading text-primary mt-0 mb-5 font-normal leading-tight tracking-[0.005em]; }
+  h1 { @apply text-[1.75rem] sm:text-[2rem]; }
+  h2 { @apply text-[1.5rem] sm:text-[1.75rem]; }
+  h3 { @apply text-xl; }
+  p { @apply mb-4 leading-relaxed; }
+  input[type='checkbox'], input[type='radio'] { accent-color: var(--color-primary); }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+}
