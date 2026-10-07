@@ -3,8 +3,10 @@
 Internal visitor booking and check-in for Woodhall Capital, served at `https://visitor.woodhallcap.com`.
 Design: [`docs/superpowers/specs/2026-10-06-visitor-system-design.md`](docs/superpowers/specs/2026-10-06-visitor-system-design.md).
 
-**Status:** foundation, sign-in, user management (IT and admins) and departments (admins) are built. Booking, reception, security and IT
-screens show "Coming soon". Email is deliberately not built yet; admins share one-time set-password links instead.
+**Status:** sign-in, user management (IT and admins), departments (admins), booking (staff and reception walk-ins),
+the reception Today board with check-in and check-out, and the security views (on site now, today's log, history) are
+built. The IT dashboard and CSV export show "Coming soon". Email is deliberately not built yet; admins share one-time
+set-password links instead.
 
 ## Tech stack
 
