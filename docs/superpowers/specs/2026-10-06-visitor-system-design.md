@@ -8,7 +8,7 @@
 
 ## 1. Goal
 
-A custom web app at **`https://visitor.woodhallcap.com`** that replaces the Power Apps visitor booking system. Staff and reception book visitors, reception checks them in and out, security watches who is on site, IT sees statistics, and admins manage users and departments.
+A custom web app at **`https://visitor.woodhallcap.com`** that replaces the Power Apps visitor booking system. Staff and reception book visitors, reception checks them in and out, security watches who is on site, IT sees statistics and controls user accounts (including who is an admin), and admins manage departments and everyday user accounts.
 
 It must:
 
@@ -24,7 +24,7 @@ It must:
 | Build                   | New custom web app (not edits to the Power App)                                                                         |
 | Hosting                 | Bluehost shared hosting (box5735, where `visitor.woodhallcap.com` already resolves)                                     |
 | Stack                   | React 19 + TypeScript + Tailwind v4 + Vite front end built to static files; PHP 8 JSON API; MySQL (InnoDB, utf8mb4)     |
-| Auth                    | Own accounts, email + password, created by an admin by invitation (a copyable set-password link until email is added) |
+| Auth                    | Own accounts, email + password, created by IT or an admin by invitation (a copyable set-password link until email is added) |
 | Approval                | None. Bookings are confirmed immediately                                                                                |
 | Front desk vs reception | Same people, one **Reception** role                                                                                     |
 | Visitor type            | A label only. It does not change the form or workflow                                                                   |
@@ -41,11 +41,14 @@ It must:
 | Edit or cancel a visit         | own, while `booked` | any, while `booked` | –              | –              | any, while `booked` |
 | Check in / check out           | –                   | ✔                   | –              | –              | –                   |
 | Stats dashboard and CSV export | –                   | –                   | –              | ✔              | ✔                   |
-| Manage users and departments   | –                   | –                   | –              | –              | ✔                   |
+| Manage staff, reception and security accounts | – | – | – | ✔ | ✔ |
+| Manage admin and IT accounts, and grant those roles | – | – | – | ✔ | – |
+| Manage departments             | –                   | –                   | –              | –              | ✔                   |
 
 - **Reception is the only role that can check visitors in or out.** Admin cannot.
 - Security's job is to see who is checked in and whether they have checked out.
-- IT's job is management oversight through statistics and stat cards.
+- IT's job is management oversight through statistics and stat cards, **and control of user accounts**. Woodhall Capital is a large organization, so IT can make as many admins as needed. Only IT can create, edit, disable or reset an admin or IT account, or give someone the admin or IT role. Admins manage staff, reception and security accounts only.
+- Nobody can change their own role or disable their own account.
 - Permissions are enforced in PHP. The UI hides what a role cannot use, but that is not a security control.
 
 ## 4. Visit lifecycle
@@ -134,8 +137,8 @@ A single entry point, `api/index.php`, with a small router. JSON in, JSON out. A
 | `GET /hosts`                                              | reception, admin               | active users for the host picker (id, name, department)                          |
 | `GET /stats?from&to`                                      | it, admin                      | stat cards and chart series (§8)                                                 |
 | `GET /visits/export.csv?from&to`                          | it, admin                      | CSV of the visit log                                                             |
-| `GET/POST/PATCH /users`, `POST /users/{id}/reset-link`    | admin                          | user management; invite and reset-link return a one-time set-password URL        |
-| `GET/POST/PATCH /departments`                             | admin (GET also for reception) | department management                                                            |
+| `GET/POST/PATCH /users`, `POST /users/{id}/reset-link`    | it, admin                      | user management; invite and reset-link return a one-time set-password URL. Admin and IT accounts (and granting those roles) are IT-only |
+| `GET/POST/PATCH /departments`                             | admin (GET also for reception and IT) | department management                                                     |
 
 **Errors:** `{ "error": { "code": "validation_failed" | "unauthenticated" | "forbidden" | "not_found" | "conflict" | "rate_limited" | "server_error", "message": "...", "fields": { "field": "message" } } }` with status 422, 401, 403, 404, 409, 429 or 500. Unhandled exceptions are logged server-side and return a generic 500 with no stack trace.
 
@@ -146,7 +149,7 @@ A single entry point, `api/index.php`, with a small router. JSON in, JSON out. A
 - PDO prepared statements only.
 - Passwords need at least 10 characters.
 - Disabling a user ends their next request.
-- The first admin is created by `scripts/create-admin.php` (CLI only, refuses to run over HTTP).
+- The first IT account is created by `scripts/create-it-user.php` (CLI only, refuses to run over HTTP). IT then invites admins and everyone else.
 
 ## 8. Screens
 
@@ -178,12 +181,14 @@ The layout follows KYC. **Login and set password** use the KYC two-column layout
   - **Stat cards:** visitors today, on site now, visits in range, average visit length (checked-out visits), no-show rate.
   - **Charts:** visits per day, visits by visitor type, top departments, arrivals by hour of day.
 - _Export:_ CSV of the visit log for the range.
+- _Users:_ the user management screen described under Admin, with full control over admin and IT accounts.
+- _Today_ and _All visits:_ the Reception screens, read-only (no check-in, check-out, booking or cancelling).
 
 **Admin**
 
-- _Users:_ list, invite (name, email, phone, role, department), edit role and department, disable or enable, and generate a new set-password link.
-  - Inviting a user, or clicking **Reset password**, shows the one-time set-password link in a dialog with a copy button. The admin shares it with the person directly (Teams, WhatsApp, in person). It is shown once and expires (invite 72 h, reset 1 h).
-  - The login page has no "forgot password" form yet. It says "Forgot your password? Ask an administrator to reset it."
+- _Users:_ list, invite (name, email, phone, role, department), edit role and department, disable or enable, and generate a new set-password link. Shared with IT. For an admin, admin and IT accounts are listed but read-only, and the role picker offers only Staff, Reception and Security.
+  - Inviting a user, or clicking **Reset password**, shows the one-time set-password link in a dialog with a copy button. The admin or IT person shares it with the person directly (Teams, WhatsApp, in person). It is shown once and expires (invite 72 h, reset 1 h).
+  - The login page has no "forgot password" form yet. It says "Forgot your password? Ask an administrator to reset it." (IT handles resets for admin and IT accounts.)
 - _Departments:_ add, rename, activate or deactivate.
 - Admin also has every Reception screen except the check-in and check-out actions, plus the IT dashboard.
 
@@ -196,7 +201,7 @@ Charts follow the brand palette. Use a small dependency only if hand-rolled SVG 
 **No email is sent, configured or built until every other part of the app is done.** Until then:
 
 - no `lib/mailer.php`, no templates, no Graph or SMTP settings, no mail-related config or tests;
-- account set-up and password resets work through admin-generated set-password links (§8 Admin);
+- account set-up and password resets work through set-password links generated by IT or an admin (§8 Admin);
 - `visitor_email` is collected and stored but not used.
 
 The code leaves clean seams so email can be added without reshaping anything: visit creation, check-in, invite and reset-link each go through one service function where a notification call will be added.
@@ -208,7 +213,7 @@ The code leaves clean seams so email can be added without reshaping anything: vi
 | 1 | Booking confirmation | host | a visit is created (by the host or by reception) |
 | 2 | Visitor arrived | host | reception checks the visitor in |
 | 3 | Visit invitation | visitor | a visit is created, only if `visitor_email` is set |
-| 4 | Account invitation | new user | admin invites. Emails the same set-password link the dialog shows |
+| 4 | Account invitation | new user | IT or an admin invites. Emails the same set-password link the dialog shows |
 | 5 | Password reset | user | a public `POST /auth/forgot` (always 200) plus a "Forgot password" page |
 
 - Transport: Microsoft Graph `sendMail`, app-only (`tenant_id`, `client_id`, `client_secret`, `sender` in `config.local.php`; `Mail.Send` limited to the sender mailbox). See `kyc/docs/email-setup-microsoft-365.md`. A `log` transport for development and tests.
@@ -257,7 +262,7 @@ visitor/
   storage/                  error log (not web-accessible; denied by .htaccess)
   config.php                defaults, reads config.local.php (git-ignored) for DB and Graph secrets
   scripts/package.sh        builds the front end and assembles the Bluehost deploy zip
-  scripts/create-admin.php
+  scripts/create-it-user.php
   tests/php/                custom assertion harness as in KYC, against a throwaway MySQL test DB
   .htaccess                 routes /api/* to api/index.php, everything else to the SPA's index.html
 ```
@@ -290,13 +295,13 @@ SMS, a self check-in kiosk, visitor photo capture, badge printing, data retentio
 | 4   | Data retention for visitor phone and ID numbers (NDPR)                                                                          | CTO                                |
 | 5   | MySQL database and user on Bluehost, and PHP version on box5735                                                                 | whoever holds the Bluehost account |
 | 6   | Whether the old Power Apps data needs importing                                                                                 | NO                                 |
-| 7   | Who gets the first admin account                                                                                                | IT                                 |
+| 7   | Who gets the first IT account (they then create the admins)                                                                     | IT                                 |
 
 ## 15. Build order
 
 1. Foundation: repo scaffold, config, DB connection, migrations, router, error format, test harness.
-2. Auth: login, sessions, CSRF, rate limit, set-password links, `create-admin.php`.
-3. Admin: users and departments.
+2. Auth: login, sessions, CSRF, rate limit, set-password links, `create-it-user.php`.
+3. User management (IT and admin) and departments (admin).
 4. Booking: staff and reception booking, my visitors, all visits.
 5. Reception board: check-in, check-out, overstay, no-show sweep.
 6. Security views.
