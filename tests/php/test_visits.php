@@ -217,4 +217,159 @@ db_test('overstay is derived from the expected departure', function () {
     assert_equal(false, visit_find($gone['id'])['overstayed']);
 });
 
+// ---- edit / cancel ----
+
+db_test('staff edit their own booked visit but cannot move it to another host', function () {
+    $staff = make_user('staff');
+    $other = make_user('staff');
+    $visit = make_visit(['host_user_id' => $staff['id'], 'visit_date' => tomorrow()]);
+    act_as($staff);
+    $response = request('PATCH', "/visits/{$visit['id']}", ['visitor_name' => 'Renamed Visitor', 'expected_arrival' => '15:00', 'host_user_id' => $other['id']]);
+    assert_status(200, $response);
+    assert_equal('Renamed Visitor', $response->body['visit']['visitor_name']);
+    assert_equal('15:00', $response->body['visit']['expected_arrival']);
+    assert_equal($staff['id'], $response->body['visit']['host_user_id']);
+    $audit = json_decode(db_one("SELECT details FROM audit_log WHERE action = 'visit.update'")['details'], true);
+    assert_equal(['visitor_name', 'expected_arrival'], $audit['fields']);
+});
+
+db_test("staff cannot see or change another staff member's visit", function () {
+    $visit = make_visit();
+    act_as(make_user('staff'));
+    $response = request('PATCH', "/visits/{$visit['id']}", ['visitor_name' => 'Hijacked']);
+    assert_status(404, $response);
+    assert_equal('Visit not found.', $response->body['error']['message']);
+    assert_status(404, request('PATCH', "/visits/{$visit['id']}", ['status' => 'cancelled']));
+    assert_equal('Tola Ade', visit_find($visit['id'])['visitor_name']);
+});
+
+db_test('reception moves a visit to another host and the department follows', function () {
+    $legal = make_department('Legal');
+    $newHost = make_user('staff', ['department_id' => $legal['id']]);
+    $visit = make_visit(['visit_date' => tomorrow()]);
+    act_as(make_user('reception'));
+    $response = request('PATCH', "/visits/{$visit['id']}", ['host_user_id' => $newHost['id']]);
+    assert_status(200, $response);
+    assert_equal($newHost['id'], $response->body['visit']['host_user_id']);
+    assert_equal($legal['id'], $response->body['visit']['department_id']);
+});
+
+db_test('edits are validated like new bookings', function () {
+    $visit = make_visit(['visit_date' => tomorrow()]);
+    act_as(make_user('admin'));
+    $response = request('PATCH', "/visits/{$visit['id']}", ['expected_departure' => '09:00', 'expected_arrival' => '10:00']);
+    assert_status(422, $response);
+    assert_equal('Departure must be after arrival.', $response->body['error']['fields']['expected_departure']);
+});
+
+db_test('cancelling records who and when; only booked visits can change', function () {
+    $visit = make_visit();
+    $reception = make_user('reception');
+    act_as($reception);
+    $response = request('PATCH', "/visits/{$visit['id']}", ['status' => 'cancelled']);
+    assert_status(200, $response);
+    assert_equal('cancelled', $response->body['visit']['status']);
+    assert_equal($reception['id'], $response->body['visit']['cancelled_by']);
+    assert_true($response->body['visit']['cancelled_at'] !== null);
+    $again = request('PATCH', "/visits/{$visit['id']}", ['status' => 'cancelled']);
+    assert_status(409, $again);
+    assert_equal('Only booked visits can be changed.', $again->body['error']['message']);
+    assert_status(409, request('PATCH', "/visits/{$visit['id']}", ['visitor_name' => 'Too Late']));
+    assert_equal(1, db_one("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'visit.cancel'")['n']);
+});
+
+db_test('status can only be set to cancelled', function () {
+    $visit = make_visit();
+    act_as(make_user('reception'));
+    $response = request('PATCH', "/visits/{$visit['id']}", ['status' => 'checked_in']);
+    assert_status(422, $response);
+    assert_equal('Invalid value.', $response->body['error']['fields']['status']);
+});
+
+db_test('security and IT cannot edit visits; a missing visit is 404', function () {
+    $visit = make_visit();
+    foreach (['security', 'it'] as $role) {
+        act_as(make_user($role));
+        assert_status(403, request('PATCH', "/visits/{$visit['id']}", ['status' => 'cancelled']));
+    }
+    act_as(make_user('reception'));
+    assert_status(404, request('PATCH', '/visits/999', ['status' => 'cancelled']));
+});
+
+// ---- check-in / check-out ----
+
+db_test('reception checks in a visitor booked for today and records the details', function () {
+    $visit = make_visit();
+    $reception = make_user('reception', ['full_name' => 'Rita Desk']);
+    act_as($reception);
+    $response = request('POST', "/visits/{$visit['id']}/check-in", ['badge_number' => ' V-12 ', 'id_type' => 'Passport', 'id_number' => 'A1234567']);
+    assert_status(200, $response);
+    $checked = $response->body['visit'];
+    assert_equal('checked_in', $checked['status']);
+    assert_equal('V-12', $checked['badge_number']);
+    assert_equal('Passport', $checked['id_type']);
+    assert_equal('A1234567', $checked['id_number']);
+    assert_equal('Rita Desk', $checked['checked_in_by_name']);
+    assert_true($checked['checked_in_at'] !== null);
+    assert_equal(1, db_one("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'visit.check_in'")['n']);
+});
+
+db_test('check-in details are optional and length-limited', function () {
+    $visit = make_visit();
+    act_as(make_user('reception'));
+    $tooLong = request('POST', "/visits/{$visit['id']}/check-in", ['badge_number' => str_repeat('b', 31), 'id_type' => str_repeat('t', 41), 'id_number' => str_repeat('n', 41)]);
+    assert_status(422, $tooLong);
+    assert_equal(['badge_number' => 'Use 30 characters or fewer.', 'id_type' => 'Use 40 characters or fewer.', 'id_number' => 'Use 40 characters or fewer.'], $tooLong->body['error']['fields']);
+    $plain = request('POST', "/visits/{$visit['id']}/check-in");
+    assert_status(200, $plain);
+    assert_equal(null, $plain->body['visit']['badge_number']);
+});
+
+db_test('only visitors booked for today can be checked in, and only once', function () {
+    $future = make_visit(['visit_date' => tomorrow()]);
+    $cancelled = make_visit(['status' => 'cancelled']);
+    $today = make_visit();
+    act_as(make_user('reception'));
+    foreach ([$future, $cancelled] as $visit) {
+        $response = request('POST', "/visits/{$visit['id']}/check-in");
+        assert_status(409, $response);
+        assert_equal('Only visitors booked for today can be checked in.', $response->body['error']['message']);
+    }
+    assert_status(200, request('POST', "/visits/{$today['id']}/check-in", ['badge_number' => 'FIRST']));
+    assert_status(409, request('POST', "/visits/{$today['id']}/check-in", ['badge_number' => 'SECOND']));
+    assert_equal('FIRST', visit_find($today['id'])['badge_number']);
+});
+
+db_test('reception checks visitors out; only visitors on site can be checked out', function () {
+    $visit = make_visit(['status' => 'checked_in', 'checked_in_at' => date('Y-m-d') . ' 09:00:00']);
+    $booked = make_visit();
+    act_as(make_user('reception'));
+    $response = request('POST', "/visits/{$visit['id']}/check-out");
+    assert_status(200, $response);
+    assert_equal('checked_out', $response->body['visit']['status']);
+    assert_true($response->body['visit']['checked_out_at'] !== null);
+    $again = request('POST', "/visits/{$visit['id']}/check-out");
+    assert_status(409, $again);
+    assert_equal('Only visitors on site can be checked out.', $again->body['error']['message']);
+    assert_status(409, request('POST', "/visits/{$booked['id']}/check-out"));
+    assert_equal(1, db_one("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'visit.check_out'")['n']);
+});
+
+db_test('a visitor checked in yesterday can be checked out today', function () {
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $visit = make_visit(['visit_date' => $yesterday, 'status' => 'checked_in', 'checked_in_at' => $yesterday . ' 17:00:00']);
+    act_as(make_user('reception'));
+    assert_status(200, request('POST', "/visits/{$visit['id']}/check-out"));
+});
+
+db_test('only reception may check visitors in or out', function () {
+    $visit = make_visit();
+    foreach (['staff', 'security', 'it', 'admin'] as $role) {
+        act_as(make_user($role));
+        assert_status(403, request('POST', "/visits/{$visit['id']}/check-in"));
+        assert_status(403, request('POST', "/visits/{$visit['id']}/check-out"));
+    }
+    assert_equal('booked', visit_find($visit['id'])['status']);
+});
+
 test_summary();

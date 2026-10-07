@@ -137,3 +137,110 @@ function hosts_list(): array
          WHERE u.role = 'staff' AND u.active = 1 ORDER BY u.full_name, u.id"
     );
 }
+
+const VISIT_EDITABLE_FIELDS = ['visitor_name', 'visitor_phone', 'visitor_email', 'visitor_company', 'visitor_type',
+    'visit_date', 'expected_arrival', 'expected_departure', 'purpose', 'party_size'];
+
+/** Staff may only act on visits they host; to them, anyone else's visit does not exist. */
+function visit_for_editor(int $id, array $actor): array
+{
+    $visit = visit_find($id);
+    if ($visit === null || ($actor['role'] === 'staff' && $visit['host_user_id'] !== $actor['id'])) {
+        throw HttpError::notFound('Visit not found.');
+    }
+    return $visit;
+}
+
+function visit_update(int $id, array $input, array $actor): array
+{
+    $visit = visit_for_editor($id, $actor);
+    if ($visit['status'] !== 'booked') {
+        throw HttpError::conflict('Only booked visits can be changed.');
+    }
+    if (array_key_exists('status', $input)) {
+        if ($input['status'] !== 'cancelled') {
+            throw HttpError::validation(['status' => 'Invalid value.']);
+        }
+        $changed = db_exec(
+            "UPDATE visits SET status = 'cancelled', cancelled_at = NOW(), cancelled_by = ? WHERE id = ? AND status = 'booked'",
+            [$actor['id'], $id]
+        );
+        if ($changed !== 1) {
+            throw HttpError::conflict('Only booked visits can be changed.');
+        }
+        audit($actor['id'], 'visit.cancel', 'visit', $id);
+        return visit_find($id, $actor);
+    }
+
+    $merged = array_intersect_key($visit, array_flip(VISIT_EDITABLE_FIELDS));
+    foreach (VISIT_EDITABLE_FIELDS as $field) {
+        if (array_key_exists($field, $input)) {
+            $merged[$field] = $input[$field];
+        }
+    }
+    $hostId = $actor['role'] !== 'staff' && array_key_exists('host_user_id', $input) ? $input['host_user_id'] : $visit['host_user_id'];
+    [$data, $host] = visit_validate_with_host($merged, $hostId);
+    $departmentId = $host['id'] === $visit['host_user_id'] ? $visit['department_id'] : $host['department_id'];
+
+    $changed = db_exec(
+        'UPDATE visits SET visitor_name = ?, visitor_phone = ?, visitor_email = ?, visitor_company = ?, visitor_type = ?,
+            host_user_id = ?, department_id = ?, visit_date = ?, expected_arrival = ?, expected_departure = ?, purpose = ?, party_size = ?
+         WHERE id = ? AND status = ?',
+        [
+            $data['visitor_name'], $data['visitor_phone'], $data['visitor_email'], $data['visitor_company'], $data['visitor_type'],
+            $host['id'], $departmentId, $data['visit_date'], $data['expected_arrival'], $data['expected_departure'],
+            $data['purpose'], $data['party_size'], $id, 'booked',
+        ]
+    );
+    if ($changed === 0 && visit_find($id)['status'] !== 'booked') {
+        throw HttpError::conflict('Only booked visits can be changed.');
+    }
+    $fields = [];
+    foreach (VISIT_EDITABLE_FIELDS as $field) {
+        if ($data[$field] !== $visit[$field]) {
+            $fields[] = $field;
+        }
+    }
+    if ($host['id'] !== $visit['host_user_id']) {
+        $fields[] = 'host_user_id';
+    }
+    if ($fields) {
+        audit($actor['id'], 'visit.update', 'visit', $id, ['fields' => $fields]);
+    }
+    return visit_find($id, $actor);
+}
+
+function visit_check_in(int $id, array $input, array $actor): array
+{
+    $details = validate_check_in($input);
+    if (visit_find($id) === null) {
+        throw HttpError::notFound('Visit not found.');
+    }
+    // The conditional UPDATE makes a double click from two desks safe: only one of them wins.
+    $changed = db_exec(
+        "UPDATE visits SET status = 'checked_in', checked_in_at = NOW(), checked_in_by = ?, badge_number = ?, id_type = ?, id_number = ?
+         WHERE id = ? AND status = 'booked' AND visit_date = CURDATE()",
+        [$actor['id'], $details['badge_number'], $details['id_type'], $details['id_number'], $id]
+    );
+    if ($changed !== 1) {
+        throw HttpError::conflict('Only visitors booked for today can be checked in.');
+    }
+    audit($actor['id'], 'visit.check_in', 'visit', $id);
+    return visit_find($id, $actor);
+}
+
+function visit_check_out(int $id, array $actor): array
+{
+    if (visit_find($id) === null) {
+        throw HttpError::notFound('Visit not found.');
+    }
+    $changed = db_exec(
+        "UPDATE visits SET status = 'checked_out', checked_out_at = NOW(), checked_out_by = ? WHERE id = ? AND status = 'checked_in'",
+        [$actor['id'], $id]
+    );
+    if ($changed !== 1) {
+        throw HttpError::conflict('Only visitors on site can be checked out.');
+    }
+    audit($actor['id'], 'visit.check_out', 'visit', $id);
+    return visit_find($id, $actor);
+}

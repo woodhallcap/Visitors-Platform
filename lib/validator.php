@@ -180,3 +180,22 @@ function validate_visit(array $input): array
         'party_size' => $party,
     ];
 }
+
+/** Optional details reception records at check-in (spec §5). */
+function validate_check_in(array $input): array
+{
+    $limits = ['badge_number' => 30, 'id_type' => 40, 'id_number' => 40];
+    $errors = [];
+    $data = [];
+    foreach ($limits as $field => $max) {
+        $value = clean_text($input[$field] ?? '');
+        if (mb_strlen($value) > $max) {
+            $errors[$field] = "Use {$max} characters or fewer.";
+        }
+        $data[$field] = $value === '' ? null : $value;
+    }
+    if ($errors) {
+        throw HttpError::validation($errors);
+    }
+    return $data;
+}
