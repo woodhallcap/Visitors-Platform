@@ -13,6 +13,7 @@ session_set_cookie_params([
     'httponly' => true,
     'samesite' => 'Lax',
 ]);
+ini_set('session.gc_maxlifetime', (string) config('session_idle_seconds'));
 session_start();
 
 $raw = file_get_contents('php://input');

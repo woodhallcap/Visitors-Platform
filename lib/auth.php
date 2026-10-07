@@ -1,10 +1,17 @@
 <?php
 declare(strict_types=1);
 
-// A real bcrypt hash of a throwaway string: verifying against it when the email is unknown keeps
-// response times the same as for a wrong password.
-const DUMMY_PASSWORD_HASH = '$2y$12$GtatOUV8rnNDZfPVSN6uVOh4LQuZKIkuGbE8vVopLRSKXhX0vWaDq';
+/**
+ * A hash made with the same algorithm and cost as real passwords. Verifying against it when the email is
+ * unknown keeps response times the same as for a wrong password. Computed once per process.
+ */
+function dummy_password_hash(): string
+{
+    static $hash = null;
+    return $hash ??= password_hash('not-a-real-password', PASSWORD_DEFAULT);
+}
 const LOGIN_MAX_FAILURES = 5;
+const LOGIN_MAX_FAILURES_PER_EMAIL = 20;
 
 function session_rotate(): void
 {
@@ -69,7 +76,14 @@ function login_is_blocked(string $email, string $ip): bool
         'SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND ip = ? AND created_at > NOW() - INTERVAL 15 MINUTE',
         [$email, $ip]
     );
-    return $row['n'] >= LOGIN_MAX_FAILURES;
+    if ($row['n'] >= LOGIN_MAX_FAILURES) {
+        return true;
+    }
+    $any = db_one(
+        'SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND created_at > NOW() - INTERVAL 15 MINUTE',
+        [$email]
+    );
+    return $any['n'] >= LOGIN_MAX_FAILURES_PER_EMAIL;
 }
 
 function login_record_failure(string $email, string $ip): void

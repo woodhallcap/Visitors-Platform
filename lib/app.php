@@ -33,7 +33,12 @@ function handle_request(
         if ($route === null) {
             throw HttpError::notFound();
         }
-        if (!($route['options']['public'] ?? false)) {
+        if ($route['options']['public'] ?? false) {
+            // Public writes skip CSRF tokens, so require JSON: a cross-site form cannot send it without a CORS preflight.
+            if ($method !== 'GET' && stripos((string) ($headers['content-type'] ?? ''), 'application/json') !== 0) {
+                throw new HttpError(415, 'unsupported_media_type', 'Send the request as JSON.');
+            }
+        } else {
             require_user();
             if ($method !== 'GET') {
                 csrf_verify($headers['x-csrf-token'] ?? null);

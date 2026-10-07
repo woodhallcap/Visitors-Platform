@@ -131,4 +131,30 @@ test_case('normalize_phone accepts common formats and rejects junk', function ()
     assert_equal(null, normalize_phone('080-CALL-NOW'));
 });
 
+db_test('login needs a JSON content type', function () {
+    make_user('staff', ['email' => 'ada@example.com']);
+    $body = ['email' => 'ada@example.com', 'password' => TEST_PASSWORD];
+    assert_status(415, request('POST', '/auth/login', $body, [], []));
+    assert_status(415, request('POST', '/auth/login', $body, [], ['content-type' => 'text/plain']));
+    assert_status(200, request('POST', '/auth/login', $body, [], ['content-type' => 'application/json; charset=utf-8']));
+});
+
+db_test('20 failures for one email across IPs block it from a new IP', function () {
+    make_user('staff', ['email' => 'ada@example.com']);
+    for ($i = 1; $i <= 20; $i++) {
+        db_exec("INSERT INTO login_attempts (email, ip, created_at) VALUES ('ada@example.com', ?, NOW())", ["192.0.2.{$i}"]);
+    }
+    $response = request('POST', '/auth/login', ['email' => 'ada@example.com', 'password' => TEST_PASSWORD]);
+    assert_status(429, $response);
+    assert_equal('rate_limited', $response->body['error']['code']);
+});
+
+db_test('4 failures from one IP do not block a correct login from another', function () {
+    make_user('staff', ['email' => 'ada@example.com']);
+    for ($i = 0; $i < 4; $i++) {
+        db_exec("INSERT INTO login_attempts (email, ip, created_at) VALUES ('ada@example.com', '192.0.2.99', NOW())");
+    }
+    assert_status(200, request('POST', '/auth/login', ['email' => 'ada@example.com', 'password' => TEST_PASSWORD]));
+});
+
 test_summary();

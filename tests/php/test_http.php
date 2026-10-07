@@ -52,7 +52,7 @@ test_case('validation errors carry their fields', function () {
     $router->add('POST', '/thing', function () {
         throw HttpError::validation(['name' => 'Enter a name.']);
     }, ['public' => true]);
-    $response = handle_request('POST', '/thing', [], [], [], '', $router);
+    $response = handle_request('POST', '/thing', [], [], ['content-type' => 'application/json'], '', $router);
     assert_status(422, $response);
     assert_equal('validation_failed', $response->body['error']['code']);
     assert_equal(['name' => 'Enter a name.'], $response->body['error']['fields']);
@@ -72,7 +72,7 @@ test_case('an unexpected exception becomes a generic 500 without leaking details
 test_case('handlers can return a Response with a custom status', function () {
     $router = new Router();
     $router->add('POST', '/made', fn(Request $r) => new Response(201, ['id' => 7]), ['public' => true]);
-    $response = handle_request('POST', '/made', [], [], [], '', $router);
+    $response = handle_request('POST', '/made', [], [], ['content-type' => 'application/json'], '', $router);
     assert_status(201, $response);
     assert_equal(['id' => 7], $response->body);
 });
@@ -82,7 +82,7 @@ test_case('handlers receive body, query, params and ip', function () {
     $router->add('POST', '/echo/{id}', fn(Request $r) => [
         'id' => $r->params['id'], 'body' => $r->body, 'query' => $r->query, 'ip' => $r->ip,
     ], ['public' => true]);
-    $response = handle_request('POST', '/echo/5', ['a' => 1], ['q' => 'x'], [], '10.1.2.3', $router);
+    $response = handle_request('POST', '/echo/5', ['a' => 1], ['q' => 'x'], ['content-type' => 'application/json'], '10.1.2.3', $router);
     assert_equal(['id' => 5, 'body' => ['a' => 1], 'query' => ['q' => 'x'], 'ip' => '10.1.2.3'], $response->body);
 });
 

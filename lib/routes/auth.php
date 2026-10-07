@@ -29,7 +29,7 @@ function auth_login(Request $req): array
 
     $row = db_one('SELECT id, password_hash, active FROM users WHERE email = ?', [$email]);
     $hash = $row['password_hash'] ?? null;
-    $verified = password_verify($password, $hash ?? DUMMY_PASSWORD_HASH);
+    $verified = password_verify($password, $hash ?? dummy_password_hash());
     if (!$verified || $hash === null || $row['active'] !== 1) {
         login_record_failure($email, $req->ip);
         throw new HttpError(401, 'invalid_credentials', 'Email or password is incorrect.');

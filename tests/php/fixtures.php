@@ -41,6 +41,6 @@ function act_as(array $user): void
 
 function request(string $method, string $path, array $body = [], array $query = [], ?array $headers = null): Response
 {
-    $headers ??= isset($_SESSION['csrf']) ? ['x-csrf-token' => $_SESSION['csrf']] : [];
+    $headers ??= ['content-type' => 'application/json'] + (isset($_SESSION['csrf']) ? ['x-csrf-token' => $_SESSION['csrf']] : []);
     return handle_request($method, $path, $body, $query, $headers, TEST_IP);
 }
