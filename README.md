@@ -3,10 +3,9 @@
 Internal visitor booking and check-in for Woodhall Capital, served at `https://visitor.woodhallcap.com`.
 Design: [`docs/superpowers/specs/2026-10-06-visitor-system-design.md`](docs/superpowers/specs/2026-10-06-visitor-system-design.md).
 
-**Status:** sign-in, user management (IT and admins), departments (admins), booking (staff and reception walk-ins),
-the reception Today board with check-in and check-out, and the security views (on site now, today's log, history) are
-built. The IT dashboard and CSV export show "Coming soon". Email is deliberately not built yet; admins share one-time
-set-password links instead.
+**Status:** everything except email is built: sign-in, user management, departments, booking, the reception Today
+board, security views, the IT dashboard and CSV export. Email is the final milestone; until then admins share one-time
+set-password links.
 
 ## Tech stack
 
@@ -50,11 +49,17 @@ return [
 ];
 ```
 
+## Deploying
+
+`scripts/package.sh` builds `build/visitor-deploy.zip` (front end + PHP + hardened `.htaccess`). Step-by-step instructions
+for Bluehost, including the post-deploy security checks, are in [`docs/deploy-bluehost.md`](docs/deploy-bluehost.md).
+
 ## Tests
 
 ```bash
 tests/run.sh              # PHP: uses (and recreates) the woodhall_visitor_test database
 cd frontend && npm test   # front end
+tests/package_test.sh     # builds the deploy zip and checks its contents
 ```
 
 ## Accounts without email
