@@ -192,3 +192,13 @@ test.each([
   expect(screen.getByTestId('auth-layout').className).toMatch(/min-h-dvh/);
   expect(screen.getByTestId('auth-layout').className).toMatch(/overflow-x-hidden/);
 });
+
+test('the sign-in form sits on a card between a brand header and a help footer', async () => {
+  renderApp('/login', signedOut);
+  await screen.findByRole('heading', { name: 'Sign in', level: 2 });
+  expect(screen.getByText('Staff portal')).toBeInTheDocument();
+  expect(screen.getByText('Use the email and password your administrator set up for you.')).toBeInTheDocument();
+  expect(screen.getByTestId('auth-card')).toContainElement(screen.getByLabelText('Email'));
+  expect(screen.getByRole('banner')).toHaveTextContent('Woodhall Capital');
+  expect(screen.getByRole('contentinfo')).toHaveTextContent(/Internal use only.*Need help\? Ask your IT team\..*© \d{4} Woodhall Capital/);
+});
