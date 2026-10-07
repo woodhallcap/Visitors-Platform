@@ -6,3 +6,4 @@ storage/*
 !storage/.htaccess
 .DS_Store
 *.zip
+.superpowers/
