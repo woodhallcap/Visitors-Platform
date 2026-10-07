@@ -6,6 +6,7 @@ function register_auth_routes(Router $r): void
     $r->add('POST', '/auth/login', 'auth_login', ['public' => true]);
     $r->add('POST', '/auth/logout', 'auth_logout');
     $r->add('GET', '/auth/me', 'auth_me');
+    $r->add('POST', '/auth/set-password', 'auth_set_password', ['public' => true]);
 }
 
 function auth_login(Request $req): array
@@ -53,4 +54,21 @@ function auth_logout(Request $req): array
 function auth_me(Request $req): array
 {
     return ['user' => require_user(), 'csrf_token' => csrf_token()];
+}
+
+function auth_set_password(Request $req): array
+{
+    // Validate first: a typo in the password must not use up the link.
+    $password = $req->body['password'] ?? '';
+    $error = validate_password($password);
+    if ($error !== null) {
+        throw HttpError::validation(['password' => $error]);
+    }
+    $token = token_consume(is_string($req->body['token'] ?? null) ? $req->body['token'] : '');
+    if ($token === null) {
+        throw new HttpError(422, 'token_invalid', 'This link has expired or has already been used. Ask an administrator for a new one.');
+    }
+    db_exec('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $token['user_id']]);
+    audit($token['user_id'], 'auth.set_password', 'user', $token['user_id'], ['purpose' => $token['purpose']]);
+    return ['ok' => true];
 }
