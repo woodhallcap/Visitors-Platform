@@ -7,13 +7,14 @@ function app_router(): Router
     if ($router === null) {
         $router = new Router();
         register_health_routes($router);
+        register_auth_routes($router);
     }
     return $router;
 }
 
 /**
  * Handles one API request. A pure function of its arguments and $_SESSION, so tests call it directly.
- * $headers must have lower-case names.
+ * $headers must have lower-case names. Non-public routes need a signed-in user, and their writes a CSRF token.
  */
 function handle_request(
     string $method,
@@ -31,6 +32,12 @@ function handle_request(
         $route = ($router ?? app_router())->match($method, $path);
         if ($route === null) {
             throw HttpError::notFound();
+        }
+        if (!($route['options']['public'] ?? false)) {
+            require_user();
+            if ($method !== 'GET') {
+                csrf_verify($headers['x-csrf-token'] ?? null);
+            }
         }
         $result = ($route['handler'])(new Request($method, $path, $route['params'], $body, $query, $ip));
         return $result instanceof Response ? $result : new Response(200, $result);
