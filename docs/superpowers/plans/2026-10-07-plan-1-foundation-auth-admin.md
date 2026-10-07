@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A running Woodhall Capital Visitor Management app where an admin signs in, manages departments and users, and hands out one-time set-password links; every other role can sign in and sees its (placeholder) navigation.
+**Goal:** A running Woodhall Capital Visitor Management app where IT controls user accounts (including who is an admin), admins manage departments and everyday accounts, both hand out one-time set-password links, and every other role can sign in and see its (placeholder) navigation.
 
 **Architecture:** A PHP 8 JSON API (`api/index.php` → `handle_request()` → a small `Router`) over MySQL via PDO, with PHP sessions + CSRF tokens for auth. Business logic lives in focused `lib/*.php` service files; route handlers live in `lib/routes/*.php`. `handle_request()` is a pure function of (method, path, body, query, headers, `$_SESSION`), so PHP tests drive the whole API in-process without a web server. The front end is a React 19 + TypeScript + Tailwind v4 + Vite SPA ported from the KYC project's design language, re-branded Woodhall Capital.
 
@@ -28,13 +28,15 @@
 - Every POST/PATCH to a non-public route needs header `X-CSRF-Token` equal to the session token, else `403 csrf_failed`.
 - API error envelope: `{"error": {"code": "...", "message": "...", "fields": {...}}}` (`fields` only when non-empty). Codes used: `validation_failed` 422, `unauthenticated` 401, `invalid_credentials` 401, `forbidden` 403, `csrf_failed` 403, `not_found` 404, `method_not_allowed` 405, `conflict` 409, `token_invalid` 422, `rate_limited` 429, `server_error` 500. (The spec's list plus four specific codes the UI needs to tell apart.)
 - Brand: product name "Visitor Management", company "Woodhall Capital". Tokens: `primary #3c2219`, `primary-dark #2a1711`, `accent #d0c5b0`, `copper #b48569`, `copper-dark #8f6048`, `bg #f8f3f0`, `bg-alt #efe8e1`, `cream #f6f5f2`, `ink #161616`, `error #b3261e`, `radius-brand 28px`, `shadow-card 0 18px 50px rgba(60, 34, 25, 0.09)`, font Work Sans.
+- **User management (spec §3):** IT and admins use the Users screen. Only IT may create, edit, disable or reset a user whose role is `admin` or `it`, or give anyone those roles; an admin attempting it gets `403 forbidden` "Only IT can manage admin and IT accounts." Nobody may change their own role or disable their own account (`409`). Departments are admin-only to change; `GET /departments` is open to admin, IT (all departments) and reception (active only).
+- Front-end routes for user management are `/users` and `/departments` (not under `/admin`, since IT uses them too).
 - Copy rule: the login page says exactly "Forgot your password? Ask an administrator to reset it."
 - Commit messages: conventional style (`feat:`, `test:`, `docs:`…) and **no `Co-Authored-By` or other attribution trailers** (user preference).
 - Local dev DB: MySQL at `127.0.0.1:3306`, user `root`, empty password (already running on this Mac). Tests use database `woodhall_visitor_test` and refuse any name not ending in `_test`.
 
 ## Review Focus
 
-1. **Admin locks themselves out** — an admin disabling their own account or changing their own role. Expected: `409 conflict`, nothing changes. Test in Task 6.
+1. **Locking yourself out** — an IT user or admin disabling their own account or changing their own role. Expected: `409 conflict`, nothing changes. Tests in Task 6.
 2. **Over-long or multibyte passwords** — bcrypt silently ignores bytes past 72, so a 100-character password would "work" with only its prefix. Expected: >72 bytes rejected with a field error; 10 multibyte characters accepted. Tests in Task 4 (PHP) and Task 7 (TS).
 3. **A bad password burns the link** — submitting a too-short password on the set-password page must not consume the token. Expected: 422 field error, and the same link still works afterwards. Test in Task 4.
 4. **Email case and whitespace** — `"  Ada@Example.COM "` must sign in as `ada@example.com`, and inviting `ADA@example.com` when `ada@example.com` exists must be a 422, not a 500 or a duplicate. Tests in Tasks 3 and 6.
@@ -67,7 +69,7 @@ visitor/
   lib/routes/users.php            /users
   migrations/001_init.sql         full schema (spec §6)
   migrations/migrate.php          CLI runner
-  scripts/create-admin.php        CLI: first admin + set-password link
+  scripts/create-it-user.php      CLI: first IT account + set-password link
   tests/run.sh                    runs every tests/php/test_*.php
   tests/php/test_helper.php       assertion harness (from KYC) + assert_status()
   tests/php/bootstrap.php         test DB lifecycle, db_test(), request()
@@ -1505,10 +1507,10 @@ git commit -m "feat: session sign-in with CSRF protection, idle timeout and logi
 
 ---
 
-### Task 4: Set-password links and the first-admin CLI
+### Task 4: Set-password links and the first-IT-account CLI
 
 **Files:**
-- Create: `lib/tokens.php`, `scripts/create-admin.php`
+- Create: `lib/tokens.php`, `scripts/create-it-user.php`
 - Modify: `lib/routes/auth.php` (add `POST /auth/set-password`)
 - Test: `tests/php/test_tokens.php`
 
@@ -1520,7 +1522,7 @@ git commit -m "feat: session sign-in with CSRF protection, idle timeout and logi
   - `token_consume(string $raw): ?array` → `['id' => int, 'user_id' => int, 'purpose' => string]` or null (malformed, unknown, used, expired, or user inactive). Single use even under a race.
   - `set_password_link(int $userId, string $purpose): array` → `['set_password_url' => string, 'expires_at' => string, 'purpose' => string]`; the URL is `rtrim(config('site_url'), '/') . '/set-password?token=' . $token`.
   - Route `POST /auth/set-password` (public), body `{token, password}` → `{ok: true}`; 422 `validation_failed` with `fields.password` (token not consumed), 422 `token_invalid`.
-  - CLI `php scripts/create-admin.php --name="…" --email="…"`: prints the link, exits 0; exits 1 with a message for missing arguments or invalid input. (In Task 4 it inserts the user directly; Task 6 switches it to `user_create()`.)
+  - CLI `php scripts/create-it-user.php --name="…" --email="…"`: prints the link, exits 0; exits 1 with a message for missing arguments or invalid input. (In Task 4 it inserts the user directly; Task 6 switches it to `user_create()`.)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1617,19 +1619,19 @@ db_test('a used or bogus link gets token_invalid', function () {
     assert_equal('token_invalid', $response->body['error']['code']);
 });
 
-db_test('create-admin CLI creates an admin and prints a set-password link', function () {
-    $cmd = 'VISITOR_DB_NAME=' . escapeshellarg(config('db.name')) . ' php ' . escapeshellarg(ROOT_DIR . '/scripts/create-admin.php')
-        . ' --name=' . escapeshellarg('Ada Admin') . ' --email=' . escapeshellarg('Ada@Example.com') . ' 2>&1; echo "EXIT:$?"';
+db_test('create-it-user CLI creates an IT account and prints a set-password link', function () {
+    $cmd = 'VISITOR_DB_NAME=' . escapeshellarg(config('db.name')) . ' php ' . escapeshellarg(ROOT_DIR . '/scripts/create-it-user.php')
+        . ' --name=' . escapeshellarg('Ife Eze') . ' --email=' . escapeshellarg('Ife@Example.com') . ' 2>&1; echo "EXIT:$?"';
     $out = (string) shell_exec($cmd);
     assert_true(str_contains($out, 'EXIT:0'), $out);
     assert_true(str_contains($out, '/set-password?token='), $out);
-    $row = db_one("SELECT role, password_hash FROM users WHERE email = 'ada@example.com'");
-    assert_equal('admin', $row['role']);
+    $row = db_one("SELECT role, password_hash FROM users WHERE email = 'ife@example.com'");
+    assert_equal('it', $row['role']);
     assert_equal(null, $row['password_hash']);
 });
 
-db_test('create-admin CLI fails cleanly without arguments', function () {
-    $out = (string) shell_exec('VISITOR_DB_NAME=' . escapeshellarg(config('db.name')) . ' php ' . escapeshellarg(ROOT_DIR . '/scripts/create-admin.php') . ' 2>&1; echo "EXIT:$?"');
+db_test('create-it-user CLI fails cleanly without arguments', function () {
+    $out = (string) shell_exec('VISITOR_DB_NAME=' . escapeshellarg(config('db.name')) . ' php ' . escapeshellarg(ROOT_DIR . '/scripts/create-it-user.php') . ' 2>&1; echo "EXIT:$?"');
     assert_true(str_contains($out, 'EXIT:1'), $out);
     assert_true(str_contains($out, 'Usage'), $out);
 });
@@ -1721,13 +1723,13 @@ function auth_set_password(Request $req): array
 }
 ```
 
-`scripts/create-admin.php`:
+`scripts/create-it-user.php`:
 
 ```php
 <?php
 declare(strict_types=1);
 
-// Creates an admin account and prints a one-time set-password link. CLI only.
+// Creates an IT account (IT then invites admins and everyone else) and prints a one-time set-password link. CLI only.
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit;
@@ -1736,7 +1738,7 @@ require __DIR__ . '/../lib/bootstrap.php';
 
 $opts = getopt('', ['name:', 'email:']);
 if (empty($opts['name']) || empty($opts['email'])) {
-    fwrite(STDERR, "Usage: php scripts/create-admin.php --name=\"Full Name\" --email=\"person@woodhallcap.com\"\n");
+    fwrite(STDERR, "Usage: php scripts/create-it-user.php --name=\"Full Name\" --email=\"person@woodhallcap.com\"\n");
     exit(1);
 }
 
@@ -1747,15 +1749,15 @@ if (mb_strlen($name) < 2 || filter_var($email, FILTER_VALIDATE_EMAIL) === false)
     exit(1);
 }
 try {
-    $id = db_insert("INSERT INTO users (full_name, email, role) VALUES (?, ?, 'admin')", [$name, $email]);
+    $id = db_insert("INSERT INTO users (full_name, email, role) VALUES (?, ?, 'it')", [$name, $email]);
 } catch (PDOException $e) {
     fwrite(STDERR, is_duplicate_key($e) ? "A user with this email already exists.\n" : $e->getMessage() . "\n");
     exit(1);
 }
-audit(null, 'user.invite', 'user', $id, ['role' => 'admin', 'via' => 'cli']);
+audit(null, 'user.invite', 'user', $id, ['role' => 'it', 'via' => 'cli']);
 $link = set_password_link($id, 'invite');
 
-echo "Admin created: {$name} <{$email}>\n";
+echo "IT account created: {$name} <{$email}>\n";
 echo "Open this link before {$link['expires_at']} (WAT) to set the password:\n{$link['set_password_url']}\n";
 ```
 
@@ -1768,7 +1770,7 @@ Expected: every file ends `… 0 failed`; `test_tokens.php` shows `12 tests, 12 
 
 ```bash
 git add lib scripts tests
-git commit -m "feat: one-time set-password links and a create-admin CLI"
+git commit -m "feat: one-time set-password links and a CLI to create the first IT account"
 ```
 
 ---
@@ -1785,7 +1787,7 @@ git commit -m "feat: one-time set-password links and a create-admin CLI"
 - Produces:
   - A department array: `['id' => int, 'name' => string, 'active' => bool, 'user_count' => int]`.
   - `department_find(int $id): ?array`, `departments_list(bool $includeInactive): array` (ordered by name), `department_create(array $input, array $actor): array`, `department_update(int $id, array $input, array $actor): array` (input keys `name`, `active`; others ignored).
-  - Routes: `GET /departments` (admin: all; reception: active only; others 403) → `{departments: [...]}`; `POST /departments` (admin) → 201 `{department}`; `PATCH /departments/{id}` (admin) → `{department}`.
+  - Routes: `GET /departments` (admin and IT: all; reception: active only; others 403) → `{departments: [...]}`; `POST /departments` (admin) → 201 `{department}`; `PATCH /departments/{id}` (admin) → `{department}`.
   - Error messages: `name` → `'Enter a department name (2–120 characters).'` / `'A department with this name already exists.'`; `active` → `'Invalid value.'`; missing → 404 `'Department not found.'`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1799,14 +1801,14 @@ declare(strict_types=1);
 require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/fixtures.php';
 
-db_test('only admin and reception can list departments', function () {
-    foreach (['staff', 'security', 'it'] as $role) {
+db_test('only admin, IT and reception can list departments', function () {
+    foreach (['staff', 'security'] as $role) {
         act_as(make_user($role));
         assert_status(403, request('GET', '/departments'));
     }
 });
 
-db_test('admin sees every department with user counts; reception sees active ones', function () {
+db_test('admin and IT see every department with user counts; reception sees active ones', function () {
     $finance = make_department('Finance');
     make_department('Legal', false);
     make_user('staff', ['department_id' => $finance['id']]);
@@ -1817,6 +1819,9 @@ db_test('admin sees every department with user counts; reception sees active one
     assert_equal(['Finance', 'Legal'], array_column($all, 'name'));
     assert_equal(['id' => $finance['id'], 'name' => 'Finance', 'active' => true, 'user_count' => 2], $all[0]);
     assert_equal(false, $all[1]['active']);
+
+    act_as(make_user('it'));
+    assert_equal(['Finance', 'Legal'], array_column(request('GET', '/departments')->body['departments'], 'name'));
 
     act_as(make_user('reception'));
     assert_equal(['Finance'], array_column(request('GET', '/departments')->body['departments'], 'name'));
@@ -1982,8 +1987,8 @@ declare(strict_types=1);
 function register_department_routes(Router $r): void
 {
     $r->add('GET', '/departments', function (Request $req) {
-        $user = require_role('admin', 'reception');
-        return ['departments' => departments_list($user['role'] === 'admin')];
+        $user = require_role('admin', 'it', 'reception');
+        return ['departments' => departments_list($user['role'] !== 'reception')];
     });
     $r->add('POST', '/departments', function (Request $req) {
         $actor = require_role('admin');
@@ -2011,15 +2016,15 @@ Expected: every file ends `… 0 failed`; `test_departments.php` shows `8 tests,
 
 ```bash
 git add lib tests
-git commit -m "feat: departments API for admins, read-only active list for reception"
+git commit -m "feat: departments API for admins, read access for IT and reception"
 ```
 
 ---
 
-### Task 6: Users API — invite, edit, disable, reset link
+### Task 6: Users API — invite, edit, disable, reset link (IT and admins)
 
 **Files:**
-- Modify: `lib/users.php` (add list/create/update/reset-link), `lib/validator.php` (add `validate_user`), `lib/app.php` (register user routes), `scripts/create-admin.php` (use `user_create`)
+- Modify: `lib/users.php` (add list/create/update/reset-link), `lib/validator.php` (add `validate_user`), `lib/app.php` (register user routes), `scripts/create-it-user.php` (use `user_create`)
 - Create: `lib/routes/users.php`
 - Test: `tests/php/test_users.php`
 
@@ -2027,8 +2032,9 @@ git commit -m "feat: departments API for admins, read-only active list for recep
 - Consumes: Tasks 3–5.
 - Produces:
   - `validate_user(array $input): array` → `['full_name', 'email', 'phone' (?string, normalized), 'role', 'department_id' (?int), 'active' (bool)]` or throws validation. Messages: `full_name` `'Enter a full name (2–120 characters).'`; `email` `'Enter a valid email address.'`; `phone` `'Enter a valid phone number.'`; `role` `'Choose a role.'`; `department_id` `'Choose a department.'` (wrong type, unknown or inactive) / `'Staff need a department.'`; `active` `'Invalid value.'`.
-  - `users_list(): array` (ordered by full name), `user_create(array $input, ?array $actor): array` (a user; `$actor` null = CLI), `user_update(int $id, array $input, array $actor): array`, `user_reset_link(int $id, array $actor): array` (a link array, from `set_password_link`).
-  - Routes (all admin only): `GET /users` → `{users}`; `POST /users` → 201 `{user, link}` (link purpose `invite`); `PATCH /users/{id}` (keys `full_name`, `email`, `phone`, `role`, `department_id`, `active`) → `{user}`; `POST /users/{id}/reset-link` → `{link}` (purpose `invite` if the user has no password yet, else `reset`).
+  - `const PRIVILEGED_ROLES = ['admin', 'it']`; `assert_can_manage(array $actor, string ...$roles): void` (throws `HttpError(403, 'forbidden', 'Only IT can manage admin and IT accounts.')` when the actor is not IT and any of `$roles` is privileged).
+  - `users_list(): array` (ordered by full name), `user_create(array $input, ?array $actor): array` (a user; `$actor` null = CLI, which may create any role), `user_update(int $id, array $input, array $actor): array`, `user_reset_link(int $id, array $actor): array` (a link array, from `set_password_link`).
+  - Routes (IT and admin only; others 403): `GET /users` → `{users}`; `POST /users` → 201 `{user, link}` (link purpose `invite`); `PATCH /users/{id}` (keys `full_name`, `email`, `phone`, `role`, `department_id`, `active`) → `{user}`; `POST /users/{id}/reset-link` → `{link}` (purpose `invite` if the user has no password yet, else `reset`).
   - Conflicts (409): `"You can't change your own role or disable your own account."`, `'Enable this user before creating a set-password link.'`. 404: `'User not found.'`. Duplicate email: 422 `email` `'A user with this email already exists.'`.
   - Audit actions: `user.invite`, `user.update`, `user.disable`, `user.enable`, `user.reset_link`.
 
@@ -2043,19 +2049,19 @@ declare(strict_types=1);
 require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/fixtures.php';
 
-db_test('every users route is admin-only', function () {
+db_test('users routes are for IT and admins only', function () {
     $target = make_user('staff');
-    foreach (['staff', 'reception', 'security', 'it'] as $role) {
+    foreach (['staff', 'reception', 'security'] as $role) {
         act_as(make_user($role));
         assert_status(403, request('GET', '/users'));
-        assert_status(403, request('POST', '/users', ['full_name' => 'X Y', 'email' => 'x@example.com', 'role' => 'it']));
+        assert_status(403, request('POST', '/users', ['full_name' => 'X Y', 'email' => 'x@example.com', 'role' => 'security']));
         assert_status(403, request('PATCH', "/users/{$target['id']}", ['full_name' => 'Changed']));
         assert_status(403, request('POST', "/users/{$target['id']}/reset-link"));
     }
     assert_equal($target['full_name'], user_find($target['id'])['full_name']);
 });
 
-db_test('admin lists users with department names, sorted by name', function () {
+db_test('admin and IT list users with department names, sorted by name', function () {
     $finance = make_department('Finance');
     make_user('staff', ['full_name' => 'Zainab Bello', 'department_id' => $finance['id']]);
     $admin = make_user('admin', ['full_name' => 'Ada Obi']);
@@ -2064,6 +2070,9 @@ db_test('admin lists users with department names, sorted by name', function () {
     assert_equal(['Ada Obi', 'Zainab Bello'], array_column($users, 'full_name'));
     assert_equal('Finance', $users[1]['department_name']);
     assert_true(!array_key_exists('password_hash', $users[0]), 'password hash leaked');
+
+    act_as(make_user('it', ['full_name' => 'Ife Eze']));
+    assert_equal(['Ada Obi', 'Ife Eze', 'Zainab Bello'], array_column(request('GET', '/users')->body['users'], 'full_name'));
 });
 
 db_test('inviting a user returns a set-password link and stores no password', function () {
@@ -2088,9 +2097,9 @@ db_test('inviting a user returns a set-password link and stores no password', fu
 });
 
 db_test('an email that differs only in case is a duplicate', function () {
-    make_user('it', ['email' => 'ada@example.com']);
+    make_user('security', ['email' => 'ada@example.com']);
     act_as(make_user('admin'));
-    $response = request('POST', '/users', ['full_name' => 'Ada Two', 'email' => 'ADA@example.com', 'role' => 'it']);
+    $response = request('POST', '/users', ['full_name' => 'Ada Two', 'email' => 'ADA@example.com', 'role' => 'security']);
     assert_status(422, $response);
     assert_equal('A user with this email already exists.', $response->body['error']['fields']['email']);
 });
@@ -2160,21 +2169,61 @@ db_test('disabling a user ends their session; enabling restores access', functio
     assert_status(200, request('GET', '/auth/me'));
 });
 
-db_test('admins cannot disable themselves or change their own role', function () {
-    $admin = make_user('admin');
-    act_as($admin);
-    $disable = request('PATCH', "/users/{$admin['id']}", ['active' => false]);
+db_test('IT users cannot disable themselves or change their own role', function () {
+    $it = make_user('it');
+    act_as($it);
+    $disable = request('PATCH', "/users/{$it['id']}", ['active' => false]);
     assert_status(409, $disable);
     assert_equal("You can't change your own role or disable your own account.", $disable->body['error']['message']);
-    assert_status(409, request('PATCH', "/users/{$admin['id']}", ['role' => 'staff', 'department_id' => make_department('Ops')['id']]));
-    assert_equal('admin', user_find($admin['id'])['role']);
+    assert_status(409, request('PATCH', "/users/{$it['id']}", ['role' => 'admin']));
+    assert_equal('it', user_find($it['id'])['role']);
+    assert_equal(true, user_find($it['id'])['active']);
+    assert_status(200, request('PATCH', "/users/{$it['id']}", ['full_name' => 'Renamed IT']));
+});
+
+db_test('admins cannot edit their own account at all (IT manages admin accounts)', function () {
+    $admin = make_user('admin');
+    act_as($admin);
+    $response = request('PATCH', "/users/{$admin['id']}", ['active' => false]);
+    assert_status(403, $response);
+    assert_equal('Only IT can manage admin and IT accounts.', $response->body['error']['message']);
     assert_equal(true, user_find($admin['id'])['active']);
-    assert_status(200, request('PATCH', "/users/{$admin['id']}", ['full_name' => 'Renamed Admin']));
+});
+
+db_test('admins cannot create, edit, reset or grant admin and IT accounts', function () {
+    $otherAdmin = make_user('admin');
+    $it = make_user('it');
+    $staff = make_user('staff');
+    act_as(make_user('admin'));
+    $create = request('POST', '/users', ['full_name' => 'New Admin', 'email' => 'na@example.com', 'role' => 'admin']);
+    assert_status(403, $create);
+    assert_equal('Only IT can manage admin and IT accounts.', $create->body['error']['message']);
+    assert_status(403, request('POST', '/users', ['full_name' => 'New IT', 'email' => 'ni@example.com', 'role' => 'it']));
+    assert_status(403, request('PATCH', "/users/{$otherAdmin['id']}", ['full_name' => 'Renamed']));
+    assert_status(403, request('PATCH', "/users/{$it['id']}", ['active' => false]));
+    assert_status(403, request('PATCH', "/users/{$staff['id']}", ['role' => 'admin']));
+    assert_status(403, request('POST', "/users/{$it['id']}/reset-link"));
+    assert_equal('staff', user_find($staff['id'])['role']);
+    assert_equal(true, user_find($it['id'])['active']);
+    assert_equal(0, db_one('SELECT COUNT(*) AS n FROM users WHERE email IN (?, ?)', ['na@example.com', 'ni@example.com'])['n']);
+});
+
+db_test('IT creates, promotes, demotes, disables and resets admins and IT accounts', function () {
+    $staff = make_user('staff');
+    $admin = make_user('admin');
+    act_as(make_user('it'));
+    assert_status(201, request('POST', '/users', ['full_name' => 'New Admin', 'email' => 'na@example.com', 'role' => 'admin']));
+    assert_status(201, request('POST', '/users', ['full_name' => 'New IT', 'email' => 'ni@example.com', 'role' => 'it']));
+    assert_equal('admin', request('PATCH', "/users/{$staff['id']}", ['role' => 'admin'])->body['user']['role']);
+    assert_equal('reception', request('PATCH', "/users/{$admin['id']}", ['role' => 'reception'])->body['user']['role']);
+    assert_equal(false, request('PATCH', "/users/{$staff['id']}", ['active' => false])->body['user']['active']);
+    $other = make_user('admin');
+    assert_status(200, request('POST', "/users/{$other['id']}/reset-link"));
 });
 
 db_test('changing an email to one already used is a 422', function () {
-    make_user('it', ['email' => 'taken@example.com']);
-    $target = make_user('it', ['email' => 'mine@example.com']);
+    make_user('security', ['email' => 'taken@example.com']);
+    $target = make_user('security', ['email' => 'mine@example.com']);
     act_as(make_user('admin'));
     $response = request('PATCH', "/users/{$target['id']}", ['email' => 'Taken@example.com']);
     assert_status(422, $response);
@@ -2188,8 +2237,8 @@ db_test('patching a missing user is a 404', function () {
 });
 
 db_test('reset-link gives an invite link before a password exists and a reset link after', function () {
-    $invited = make_user('it', ['password' => null]);
-    $active = make_user('it');
+    $invited = make_user('security', ['password' => null]);
+    $active = make_user('security');
     act_as(make_user('admin'));
     $first = request('POST', "/users/{$invited['id']}/reset-link");
     assert_status(200, $first);
@@ -2199,7 +2248,7 @@ db_test('reset-link gives an invite link before a password exists and a reset li
 });
 
 db_test('reset-link refuses a disabled user', function () {
-    $target = make_user('it', ['active' => false]);
+    $target = make_user('security', ['active' => false]);
     act_as(make_user('admin'));
     $response = request('POST', "/users/{$target['id']}/reset-link");
     assert_status(409, $response);
@@ -2272,6 +2321,15 @@ Append to `lib/users.php`:
 
 ```php
 const USER_EDITABLE_FIELDS = ['full_name', 'email', 'phone', 'role', 'department_id', 'active'];
+const PRIVILEGED_ROLES = ['admin', 'it'];
+
+/** Spec §3: only IT may touch admin and IT accounts or hand out those roles. */
+function assert_can_manage(array $actor, string ...$roles): void
+{
+    if ($actor['role'] !== 'it' && array_intersect($roles, PRIVILEGED_ROLES)) {
+        throw new HttpError(403, 'forbidden', 'Only IT can manage admin and IT accounts.');
+    }
+}
 
 function users_list(): array
 {
@@ -2293,6 +2351,9 @@ function assert_assignable_department(?int $departmentId, ?int $currentDepartmen
 function user_create(array $input, ?array $actor): array
 {
     $data = validate_user($input);
+    if ($actor !== null) {
+        assert_can_manage($actor, $data['role']);
+    }
     assert_assignable_department($data['department_id']);
     try {
         $id = db_insert(
@@ -2319,6 +2380,7 @@ function user_update(int $id, array $input, array $actor): array
         }
     }
     $data = validate_user($merged);
+    assert_can_manage($actor, $existing['role'], $data['role']);
     assert_assignable_department($data['department_id'], $existing['department_id']);
     if ($existing['id'] === $actor['id'] && ($data['role'] !== $existing['role'] || $data['active'] !== $existing['active'])) {
         throw HttpError::conflict("You can't change your own role or disable your own account.");
@@ -2354,6 +2416,7 @@ function user_update(int $id, array $input, array $actor): array
 function user_reset_link(int $id, array $actor): array
 {
     $user = user_find($id) ?? throw HttpError::notFound('User not found.');
+    assert_can_manage($actor, $user['role']);
     if (!$user['active']) {
         throw HttpError::conflict('Enable this user before creating a set-password link.');
     }
@@ -2373,20 +2436,20 @@ declare(strict_types=1);
 function register_user_routes(Router $r): void
 {
     $r->add('GET', '/users', function (Request $req) {
-        require_role('admin');
+        require_role('admin', 'it');
         return ['users' => users_list()];
     });
     $r->add('POST', '/users', function (Request $req) {
-        $actor = require_role('admin');
+        $actor = require_role('admin', 'it');
         $user = user_create($req->body, $actor);
         return new Response(201, ['user' => $user, 'link' => set_password_link($user['id'], 'invite')]);
     });
     $r->add('PATCH', '/users/{id}', function (Request $req) {
-        $actor = require_role('admin');
+        $actor = require_role('admin', 'it');
         return ['user' => user_update($req->params['id'], $req->body, $actor)];
     });
     $r->add('POST', '/users/{id}/reset-link', function (Request $req) {
-        $actor = require_role('admin');
+        $actor = require_role('admin', 'it');
         return ['link' => user_reset_link($req->params['id'], $actor)];
     });
 }
@@ -2398,37 +2461,37 @@ In `lib/app.php`, inside `app_router()`, add after `register_department_routes($
         register_user_routes($router);
 ```
 
-Replace everything in `scripts/create-admin.php` after the `require` line with:
+Replace everything in `scripts/create-it-user.php` after the `require` line with:
 
 ```php
 $opts = getopt('', ['name:', 'email:']);
 if (empty($opts['name']) || empty($opts['email'])) {
-    fwrite(STDERR, "Usage: php scripts/create-admin.php --name=\"Full Name\" --email=\"person@woodhallcap.com\"\n");
+    fwrite(STDERR, "Usage: php scripts/create-it-user.php --name=\"Full Name\" --email=\"person@woodhallcap.com\"\n");
     exit(1);
 }
 
 try {
-    $user = user_create(['full_name' => $opts['name'], 'email' => $opts['email'], 'role' => 'admin'], null);
+    $user = user_create(['full_name' => $opts['name'], 'email' => $opts['email'], 'role' => 'it'], null);
 } catch (HttpError $e) {
     fwrite(STDERR, implode("\n", $e->fields ?: [$e->getMessage()]) . "\n");
     exit(1);
 }
 $link = set_password_link($user['id'], 'invite');
 
-echo "Admin created: {$user['full_name']} <{$user['email']}>\n";
+echo "IT account created: {$user['full_name']} <{$user['email']}>\n";
 echo "Open this link before {$link['expires_at']} (WAT) to set the password:\n{$link['set_password_url']}\n";
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `tests/run.sh`
-Expected: every file ends `… 0 failed`; `test_users.php` shows `14 tests, 14 passed, 0 failed`; `test_tokens.php` still 12/12 (the CLI now goes through `user_create`).
+Expected: every file ends `… 0 failed`; `test_users.php` shows `17 tests, 17 passed, 0 failed`; `test_tokens.php` still 12/12 (the CLI now goes through `user_create`).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add lib scripts tests
-git commit -m "feat: users API with invites, edits, disable/enable and set-password links"
+git commit -m "feat: users API for IT and admins, with IT-only control of admin and IT accounts"
 ```
 
 ---
@@ -2445,7 +2508,7 @@ git commit -m "feat: users API with invites, edits, disable/enable and set-passw
   - `lib/api.ts`: `class ApiError extends Error { status: number; code: string; fields: Record<string, string> }`; `setCsrfToken(token: string | null): void`; `onUnauthenticated(fn: () => void): () => void`; `api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<T>` (prefixes `/api`; sends `X-CSRF-Token` on non-GET; network failure → `ApiError(0, 'network_error', …)`; fires unauthenticated listeners only for code `unauthenticated`); `messageOf(err: unknown): string`.
   - `lib/validation.ts`: `type FieldErrors = Record<string, string>`; `validatePassword(pw: string): string | null`; `isValidPhone(p: string): boolean`; `interface UserFormValues { full_name: string; email: string; phone: string; role: Role | ''; department_id: string }`; `validateUserForm(v: UserFormValues): FieldErrors`; `validateDepartmentName(n: string): string | null`. Messages identical to the PHP ones.
   - `lib/format.ts`: `formatDateTime(value: string | null): string` (`'2026-10-07 14:05:00'` → `'7 Oct 2026, 14:05'`; null → `'—'`).
-  - `lib/roles.ts`: `ROLE_LABELS: Record<Role, string>`; `interface NavItem { to: string; label: string }`; `NAV: Record<Role, NavItem[]>`; `homeFor(role: Role): string`.
+  - `lib/roles.ts`: `ROLE_LABELS: Record<Role, string>`; `PRIVILEGED_ROLES: Role[]` (`['admin', 'it']`); `canManage(actor: User, targetRole: Role): boolean` (IT: always; others: only non-privileged roles); `interface NavItem { to: string; label: string }`; `NAV: Record<Role, NavItem[]>`; `homeFor(role: Role): string`.
   - Components: `Field({label?, htmlFor?, error?, hint?, children})`, `inputClass(hasError: boolean): string`, `TextInput(props: InputHTMLAttributes & {label, name, error?, hint?})`, `SelectInput(props: SelectHTMLAttributes & {label, name, error?, hint?, children})`, `Button({variant?: 'primary' | 'secondary', arrow?, ...button props})` (defaults `type="button"`), `Pill({children, tone?: 'neutral' | 'accent' | 'muted' | 'error'})`, `Banner({tone: 'error' | 'success' | 'info', children, onDismiss?})`, `Dialog({title, onClose, children})`, `Card({children, className?})`, `PageHeader({title, description?, actions?})`, `CopyLink({url})`, icons `ArrowUpRightIcon`, `CheckIcon`.
 
 - [ ] **Step 1: Generate the tree-mark SVGs and favicon**
@@ -2523,7 +2586,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  // Absolute base: the SPA serves nested routes like /admin/users, so relative asset paths would break.
+  // Absolute base: the SPA serves nested routes like /reception/today, so relative asset paths would break.
   base: '/',
   plugins: [react(), tailwindcss()],
   server: { proxy: { '/api': 'http://localhost:8000' } },
@@ -2670,7 +2733,7 @@ export interface SessionPayload {
 `frontend/src/lib/roles.ts`:
 
 ```ts
-import type { Role } from '../types';
+import type { Role, User } from '../types';
 
 export const ROLE_LABELS: Record<Role, string> = {
   staff: 'Staff',
@@ -2685,7 +2748,7 @@ export interface NavItem {
   label: string;
 }
 
-// Spec §8. Pages other than the admin ones arrive in later plans and show "Coming soon" until then.
+// Spec §8. Pages other than Users and Departments arrive in later plans and show "Coming soon" until then.
 export const NAV: Record<Role, NavItem[]> = {
   staff: [
     { to: '/my-visitors', label: 'My visitors' },
@@ -2701,10 +2764,15 @@ export const NAV: Record<Role, NavItem[]> = {
     { to: '/security/log', label: "Today's log" },
     { to: '/security/history', label: 'History' },
   ],
-  it: [{ to: '/it/dashboard', label: 'Dashboard' }],
+  it: [
+    { to: '/it/dashboard', label: 'Dashboard' },
+    { to: '/users', label: 'Users' },
+    { to: '/reception/today', label: 'Today' },
+    { to: '/visits', label: 'All visits' },
+  ],
   admin: [
-    { to: '/admin/users', label: 'Users' },
-    { to: '/admin/departments', label: 'Departments' },
+    { to: '/users', label: 'Users' },
+    { to: '/departments', label: 'Departments' },
     { to: '/reception/today', label: 'Today' },
     { to: '/visits', label: 'All visits' },
     { to: '/it/dashboard', label: 'Dashboard' },
@@ -2713,6 +2781,13 @@ export const NAV: Record<Role, NavItem[]> = {
 
 export function homeFor(role: Role): string {
   return NAV[role][0].to;
+}
+
+export const PRIVILEGED_ROLES: Role[] = ['admin', 'it'];
+
+/** Spec §3: only IT manages admin and IT accounts. The server enforces this; the UI only mirrors it. */
+export function canManage(actor: User, targetRole: Role): boolean {
+  return actor.role === 'it' || !PRIVILEGED_ROLES.includes(targetRole);
 }
 ```
 
@@ -3287,8 +3362,8 @@ git commit -m "feat: front-end scaffold with Woodhall Capital theme, shared comp
 - Produces:
   - `AuthProvider({children})`, `useAuth(): { status: 'loading' | 'signed-out' | 'signed-in'; user: User | null; login(email: string, password: string): Promise<void>; logout(): Promise<void> }`.
   - `RequireAuth()` (layout route: loading → status text; signed-out → `<Navigate to="/login" state={{from}}>`; signed-in → `<AppShell><Outlet/></AppShell>`), `RequireRole({roles, children})` (→ `NoAccess` if the role is not allowed), `HomeRedirect()`.
-  - Routes in `App`: `/login`, `/set-password`, and under the protected layout `/` (index → home), `admin/*` (admin only; ComingSoon until Task 9), `*` (ComingSoon).
-  - Test helpers: `type MockRoutes = Record<string, (body: unknown) => [number, unknown]>`; `mockFetch(routes): { calls: Array<{ method: string; path: string; body: unknown; headers: Record<string, string> }> }` (keys like `'GET /auth/me'`; unknown routes → 404 envelope); `renderApp(path: string, routes: MockRoutes)`; fixtures `ADMIN`, `STAFF` (`User`); route snippets `signedOut`, `signedInAs(user)`.
+  - Routes in `App`: `/login`, `/set-password`, and under the protected layout `/` (index → home), `users` (IT and admin; ComingSoon until Task 9), `departments` (admin; ComingSoon until Task 9), `*` (ComingSoon).
+  - Test helpers (fixtures `ADMIN` id 1, `STAFF` id 2 in Finance, `IT` id 4): `type MockRoutes = Record<string, (body: unknown) => [number, unknown]>`; `mockFetch(routes): { calls: Array<{ method: string; path: string; body: unknown; headers: Record<string, string> }> }` (keys like `'GET /auth/me'`; unknown routes → 404 envelope); `renderApp(path: string, routes: MockRoutes)`; fixtures `ADMIN`, `STAFF` (`User`); route snippets `signedOut`, `signedInAs(user)`.
 
 - [ ] **Step 1: Write the test helpers**
 
@@ -3348,6 +3423,7 @@ const BASE_USER: User = {
 
 export const ADMIN: User = { ...BASE_USER, id: 1, full_name: 'Ada Obi', email: 'ada@woodhallcap.com', role: 'admin' };
 export const STAFF: User = { ...BASE_USER, id: 2, full_name: 'Chidi Okafor', email: 'chidi@woodhallcap.com', role: 'staff', department_id: 1, department_name: 'Finance' };
+export const IT: User = { ...BASE_USER, id: 4, full_name: 'Ife Eze', email: 'ife@woodhallcap.com', role: 'it' };
 
 export const signedOut: MockRoutes = {
   'GET /auth/me': () => [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }],
@@ -3368,10 +3444,10 @@ export function signedInAs(user: User): MockRoutes {
 ```tsx
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ADMIN, STAFF, renderApp, signedInAs, signedOut } from './test-utils';
+import { ADMIN, IT, STAFF, renderApp, signedInAs, signedOut } from './test-utils';
 
 test('signed-out visitors are sent to sign in', async () => {
-  renderApp('/admin/users', signedOut);
+  renderApp('/users', signedOut);
   expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   expect(screen.getByText('Forgot your password? Ask an administrator to reset it.')).toBeInTheDocument();
 });
@@ -3416,15 +3492,27 @@ test('empty fields show inline errors without calling the API', async () => {
   expect(calls.some((c) => c.method === 'POST')).toBe(false);
 });
 
-test('staff cannot open admin pages', async () => {
-  renderApp('/admin/users', signedInAs(STAFF));
+test('staff cannot open user management', async () => {
+  renderApp('/users', signedInAs(STAFF));
   expect(await screen.findByRole('heading', { name: 'No access' })).toBeInTheDocument();
 });
 
 test('admins land on Users and see admin navigation', async () => {
   renderApp('/', signedInAs(ADMIN));
   expect(await screen.findByRole('link', { name: 'Departments' })).toBeInTheDocument();
-  expect(window.location.pathname).toBe('/admin/users');
+  expect(window.location.pathname).toBe('/users');
+});
+
+test('IT lands on the dashboard, can reach Users, but not Departments', async () => {
+  renderApp('/', signedInAs(IT));
+  expect(await screen.findByRole('link', { name: 'Users' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Departments' })).not.toBeInTheDocument();
+  expect(window.location.pathname).toBe('/it/dashboard');
+});
+
+test('IT cannot open Departments', async () => {
+  renderApp('/departments', signedInAs(IT));
+  expect(await screen.findByRole('heading', { name: 'No access' })).toBeInTheDocument();
 });
 
 test('signing out returns to the sign-in page', async () => {
@@ -3435,12 +3523,12 @@ test('signing out returns to the sign-in page', async () => {
 });
 
 test('a session that expires mid-use returns to sign in', async () => {
-  renderApp('/admin/users', {
+  renderApp('/users', {
     ...signedInAs(ADMIN),
     'GET /users': () => [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }],
     'GET /departments': () => [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }],
   });
-  // Task 8 shows ComingSoon on /admin/users, so trigger an API call the way Task 9's page will.
+  // Task 8 shows ComingSoon on /users, so trigger an API call the way Task 9's page will.
   const { api } = await import('./lib/api');
   await screen.findByRole('link', { name: 'Departments' });
   await api('GET', '/users').catch(() => undefined);
@@ -3938,7 +4026,15 @@ export default function App() {
           <Route path="/" element={<RequireAuth />}>
             <Route index element={<HomeRedirect />} />
             <Route
-              path="admin/*"
+              path="users"
+              element={
+                <RequireRole roles={['admin', 'it']}>
+                  <ComingSoon />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="departments"
               element={
                 <RequireRole roles={['admin']}>
                   <ComingSoon />
@@ -3959,7 +4055,7 @@ Add `declare module '*.svg'` support if `tsc` complains: Vite's `vite/client` ty
 - [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `cd frontend && npx tsc -b && npm test && cd ..`
-Expected: no type errors; all test files pass (13 tests in `App.test.tsx`).
+Expected: no type errors; all test files pass (15 tests in `App.test.tsx`).
 
 - [ ] **Step 7: Commit**
 
@@ -3970,17 +4066,17 @@ git commit -m "feat: sign-in, set-password, role-aware app shell and route guard
 
 ---
 
-### Task 9: Admin pages — Departments and Users
+### Task 9: Users page (IT and admin) and Departments page (admin)
 
 **Files:**
 - Create: `frontend/src/pages/admin/DepartmentsPage.tsx`, `frontend/src/pages/admin/UsersPage.tsx`, `frontend/src/pages/admin/UserFormDialog.tsx`, `frontend/src/pages/admin/LinkDialog.tsx`
-- Modify: `frontend/src/App.tsx` (replace the `admin/*` route with real routes)
+- Modify: `frontend/src/App.tsx` (swap the `users` and `departments` placeholders for the real pages)
 - Test: `frontend/src/pages/admin/DepartmentsPage.test.tsx`, `frontend/src/pages/admin/UsersPage.test.tsx`
 
 **Interfaces:**
 - Consumes: Task 7 components, `api`, `ApiError`, `messageOf`, validation, `formatDateTime`, `ROLE_LABELS`, `ROLES`; Task 8 `useAuth`, `RequireRole`, test-utils.
-- Produces: routes `/admin/users` and `/admin/departments` (admin only); any other `/admin/...` path shows ComingSoon to admins.
-  - `UserFormDialog({ user?: User; departments: Department[]; isSelf: boolean; onClose(): void; onSaved(user: User, link?: SetPasswordLink): void })`.
+- Produces: routes `/users` (IT and admin) and `/departments` (admin).
+  - `UserFormDialog({ user?: User; departments: Department[]; roles: Role[]; isSelf: boolean; onClose(): void; onSaved(user: User, link?: SetPasswordLink): void })` (`roles` = the roles the signed-in person may assign).
   - `LinkDialog({ user: User; link: SetPasswordLink; onClose(): void })`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -3997,7 +4093,7 @@ const LEGAL = { id: 2, name: 'Legal', active: false, user_count: 0 };
 const list = { 'GET /departments': () => [200, { departments: [FINANCE, LEGAL] }] as [number, unknown] };
 
 test('lists departments with user counts and status', async () => {
-  renderApp('/admin/departments', { ...signedInAs(ADMIN), ...list });
+  renderApp('/departments', { ...signedInAs(ADMIN), ...list });
   const finance = await screen.findByRole('row', { name: /Finance/ });
   expect(within(finance).getByText('3')).toBeInTheDocument();
   expect(within(finance).getByText('Active')).toBeInTheDocument();
@@ -4005,12 +4101,12 @@ test('lists departments with user counts and status', async () => {
 });
 
 test('shows an empty state when there are no departments', async () => {
-  renderApp('/admin/departments', { ...signedInAs(ADMIN), 'GET /departments': () => [200, { departments: [] }] });
+  renderApp('/departments', { ...signedInAs(ADMIN), 'GET /departments': () => [200, { departments: [] }] });
   expect(await screen.findByText('No departments yet. Add the first one above.')).toBeInTheDocument();
 });
 
 test('adds a department', async () => {
-  const { calls } = renderApp('/admin/departments', {
+  const { calls } = renderApp('/departments', {
     ...signedInAs(ADMIN),
     ...list,
     'POST /departments': () => [201, { department: { id: 3, name: 'Operations', active: true, user_count: 0 } }],
@@ -4025,7 +4121,7 @@ test('adds a department', async () => {
 });
 
 test('shows the server error for a duplicate name', async () => {
-  renderApp('/admin/departments', {
+  renderApp('/departments', {
     ...signedInAs(ADMIN),
     ...list,
     'POST /departments': () => [422, { error: { code: 'validation_failed', message: 'Please correct the highlighted fields.', fields: { name: 'A department with this name already exists.' } } }],
@@ -4036,7 +4132,7 @@ test('shows the server error for a duplicate name', async () => {
 });
 
 test('blocks a too-short name without calling the API', async () => {
-  const { calls } = renderApp('/admin/departments', { ...signedInAs(ADMIN), ...list });
+  const { calls } = renderApp('/departments', { ...signedInAs(ADMIN), ...list });
   await userEvent.type(await screen.findByLabelText('New department'), 'A');
   await userEvent.click(screen.getByRole('button', { name: 'Add department' }));
   expect(screen.getByText('Enter a department name (2–120 characters).')).toBeInTheDocument();
@@ -4044,7 +4140,7 @@ test('blocks a too-short name without calling the API', async () => {
 });
 
 test('renames a department', async () => {
-  const { calls } = renderApp('/admin/departments', {
+  const { calls } = renderApp('/departments', {
     ...signedInAs(ADMIN),
     ...list,
     'PATCH /departments/1': () => [200, { department: { ...FINANCE, name: 'Finance & Accounts' } }],
@@ -4060,7 +4156,7 @@ test('renames a department', async () => {
 });
 
 test('deactivates a department', async () => {
-  renderApp('/admin/departments', {
+  renderApp('/departments', {
     ...signedInAs(ADMIN),
     ...list,
     'PATCH /departments/1': () => [200, { department: { ...FINANCE, active: false } }],
@@ -4078,19 +4174,19 @@ test('deactivates a department', async () => {
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { User } from '../../types';
-import { ADMIN, STAFF, renderApp, signedInAs } from '../../test-utils';
+import { ADMIN, IT, STAFF, renderApp, signedInAs } from '../../test-utils';
 
 const INVITED: User = { ...STAFF, id: 3, full_name: 'Bisi Ade', email: 'bisi@woodhallcap.com', role: 'reception', department_id: null, department_name: null, has_password: false, last_login_at: null };
 const DEPARTMENTS = [{ id: 1, name: 'Finance', active: true, user_count: 1 }];
 const base = {
   ...signedInAs(ADMIN),
-  'GET /users': () => [200, { users: [ADMIN, INVITED, STAFF] }] as [number, unknown],
+  'GET /users': () => [200, { users: [ADMIN, INVITED, STAFF, IT] }] as [number, unknown],
   'GET /departments': () => [200, { departments: DEPARTMENTS }] as [number, unknown],
 };
 const LINK = { set_password_url: 'https://visitor.woodhallcap.com/set-password?token=abc', expires_at: '2026-10-10 12:00:00', purpose: 'invite' };
 
 test('lists users with role, department and status', async () => {
-  renderApp('/admin/users', base);
+  renderApp('/users', base);
   const chidi = await screen.findByRole('row', { name: /Chidi Okafor/ });
   expect(within(chidi).getByText('Staff')).toBeInTheDocument();
   expect(within(chidi).getByText('Finance')).toBeInTheDocument();
@@ -4099,7 +4195,7 @@ test('lists users with role, department and status', async () => {
 });
 
 test('search filters by name, email, role or department', async () => {
-  renderApp('/admin/users', base);
+  renderApp('/users', base);
   await screen.findByRole('row', { name: /Chidi Okafor/ });
   await userEvent.type(screen.getByLabelText('Search users'), 'finance');
   expect(screen.getByRole('row', { name: /Chidi Okafor/ })).toBeInTheDocument();
@@ -4108,7 +4204,7 @@ test('search filters by name, email, role or department', async () => {
 
 test('inviting a user shows a one-time set-password link', async () => {
   const created: User = { ...STAFF, id: 9, full_name: 'Tunde Bakare', email: 'tunde@woodhallcap.com', has_password: false, last_login_at: null };
-  const { calls } = renderApp('/admin/users', { ...base, 'POST /users': () => [201, { user: created, link: LINK }] });
+  const { calls } = renderApp('/users', { ...base, 'POST /users': () => [201, { user: created, link: LINK }] });
   await userEvent.click(await screen.findByRole('button', { name: 'Invite user' }));
   const dialog = screen.getByRole('dialog', { name: 'Invite a user' });
   await userEvent.type(within(dialog).getByLabelText('Full name'), 'Tunde Bakare');
@@ -4128,7 +4224,7 @@ test('inviting a user shows a one-time set-password link', async () => {
 });
 
 test('staff need a department before the invite is sent', async () => {
-  const { calls } = renderApp('/admin/users', base);
+  const { calls } = renderApp('/users', base);
   await userEvent.click(await screen.findByRole('button', { name: 'Invite user' }));
   const dialog = screen.getByRole('dialog', { name: 'Invite a user' });
   await userEvent.type(within(dialog).getByLabelText('Full name'), 'Tunde Bakare');
@@ -4140,7 +4236,7 @@ test('staff need a department before the invite is sent', async () => {
 });
 
 test('server field errors appear in the form', async () => {
-  renderApp('/admin/users', {
+  renderApp('/users', {
     ...base,
     'POST /users': () => [422, { error: { code: 'validation_failed', message: 'Please correct the highlighted fields.', fields: { email: 'A user with this email already exists.' } } }],
   });
@@ -4154,16 +4250,17 @@ test('server field errors appear in the form', async () => {
 });
 
 test('a new link for an invited user', async () => {
-  renderApp('/admin/users', { ...base, 'POST /users/3/reset-link': () => [200, { link: LINK }] });
+  renderApp('/users', { ...base, 'POST /users/3/reset-link': () => [200, { link: LINK }] });
   const row = await screen.findByRole('row', { name: /Bisi Ade/ });
   await userEvent.click(within(row).getByRole('button', { name: 'New invite link' }));
   expect(await screen.findByRole('dialog', { name: 'Set-password link' })).toBeInTheDocument();
 });
 
-test('admins cannot disable themselves, but can disable others', async () => {
-  renderApp('/admin/users', { ...base, 'PATCH /users/2': () => [200, { user: { ...STAFF, active: false } }] });
+test('admins cannot change their own account, but can disable staff', async () => {
+  renderApp('/users', { ...base, 'PATCH /users/2': () => [200, { user: { ...STAFF, active: false } }] });
   const me = await screen.findByRole('row', { name: /Ada Obi/ });
   expect(within(me).queryByRole('button', { name: 'Disable' })).not.toBeInTheDocument();
+  expect(within(me).getByText('Managed by IT')).toBeInTheDocument();
   const chidi = screen.getByRole('row', { name: /Chidi Okafor/ });
   await userEvent.click(within(chidi).getByRole('button', { name: 'Disable' }));
   expect(await within(screen.getByRole('row', { name: /Chidi Okafor/ })).findByText('Disabled')).toBeInTheDocument();
@@ -4171,12 +4268,35 @@ test('admins cannot disable themselves, but can disable others', async () => {
 });
 
 test('editing yourself locks the role field', async () => {
-  renderApp('/admin/users', base);
-  const me = await screen.findByRole('row', { name: /Ada Obi/ });
+  renderApp('/users', { ...base, ...signedInAs(IT) });
+  const me = await screen.findByRole('row', { name: /Ife Eze/ });
+  expect(within(me).queryByRole('button', { name: 'Disable' })).not.toBeInTheDocument();
   await userEvent.click(within(me).getByRole('button', { name: 'Edit' }));
-  const dialog = screen.getByRole('dialog', { name: 'Edit Ada Obi' });
+  const dialog = screen.getByRole('dialog', { name: 'Edit Ife Eze' });
   expect(within(dialog).getByLabelText('Role')).toBeDisabled();
   expect(within(dialog).getByText("You can't change your own role.")).toBeInTheDocument();
+});
+
+test('for an admin, admin and IT accounts are read-only and those roles cannot be assigned', async () => {
+  renderApp('/users', base);
+  const it = await screen.findByRole('row', { name: /Ife Eze/ });
+  expect(within(it).getByText('Managed by IT')).toBeInTheDocument();
+  expect(within(it).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  expect(within(it).queryByRole('button', { name: 'Reset password' })).not.toBeInTheDocument();
+  expect(within(it).queryByRole('button', { name: 'Disable' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Invite user' }));
+  const options = within(screen.getByRole('dialog', { name: 'Invite a user' })).getAllByRole('option').map((o) => o.textContent);
+  expect(options).toEqual(['Choose a role', 'Staff', 'Reception', 'Security', 'No department', 'Finance']);
+});
+
+test('IT can manage admins and assign every role', async () => {
+  renderApp('/users', { ...base, ...signedInAs(IT) });
+  const admin = await screen.findByRole('row', { name: /Ada Obi/ });
+  expect(within(admin).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  expect(within(admin).getByRole('button', { name: 'Disable' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Invite user' }));
+  const role = within(screen.getByRole('dialog', { name: 'Invite a user' })).getByLabelText('Role');
+  expect(within(role).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a role', 'Staff', 'Reception', 'Security', 'IT', 'Admin']);
 });
 ```
 
@@ -4386,17 +4506,19 @@ import { TextInput } from '../../components/TextInput';
 import { ApiError, api, messageOf } from '../../lib/api';
 import { ROLE_LABELS } from '../../lib/roles';
 import { validateUserForm, type FieldErrors, type UserFormValues } from '../../lib/validation';
-import { ROLES, type Department, type SetPasswordLink, type User } from '../../types';
+import type { Department, Role, SetPasswordLink, User } from '../../types';
 
 interface UserFormDialogProps {
   user?: User;
   departments: Department[];
+  /** The roles the signed-in person may assign (IT: all; admin: staff, reception, security). */
+  roles: Role[];
   isSelf: boolean;
   onClose: () => void;
   onSaved: (user: User, link?: SetPasswordLink) => void;
 }
 
-export function UserFormDialog({ user, departments, isSelf, onClose, onSaved }: UserFormDialogProps) {
+export function UserFormDialog({ user, departments, roles, isSelf, onClose, onSaved }: UserFormDialogProps) {
   const [values, setValues] = useState<UserFormValues>({
     full_name: user?.full_name ?? '',
     email: user?.email ?? '',
@@ -4452,7 +4574,7 @@ export function UserFormDialog({ user, departments, isSelf, onClose, onSaved }: 
         <TextInput label="Phone (optional)" name="phone" type="tel" value={values.phone} onChange={set('phone')} error={errors.phone} />
         <SelectInput label="Role" name="role" value={values.role} onChange={set('role')} error={errors.role} disabled={isSelf} hint={isSelf ? "You can't change your own role." : undefined}>
           <option value="">Choose a role</option>
-          {ROLES.map((role) => (
+          {roles.map((role) => (
             <option key={role} value={role}>
               {ROLE_LABELS[role]}
             </option>
@@ -4493,8 +4615,8 @@ import { Pill } from '../../components/Pill';
 import { api, messageOf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { formatDateTime } from '../../lib/format';
-import { ROLE_LABELS } from '../../lib/roles';
-import type { Department, SetPasswordLink, User } from '../../types';
+import { ROLE_LABELS, canManage } from '../../lib/roles';
+import { ROLES, type Department, type SetPasswordLink, type User } from '../../types';
 import { LinkDialog } from './LinkDialog';
 import { UserFormDialog } from './UserFormDialog';
 
@@ -4564,10 +4686,11 @@ export function UsersPage() {
   };
 
   const visible = (users ?? []).filter((u) => matches(u, query));
+  const assignableRoles = me ? ROLES.filter((role) => canManage(me, role)) : [];
 
   return (
     <>
-      <PageHeader title="Users" description="Invite people, set their role and department, and reset passwords." actions={<Button onClick={() => setForm({ mode: 'invite' })}>Invite user</Button>} />
+      <PageHeader title="Users" description={me?.role === 'it' ? 'Invite people, set their role and department, and reset passwords. Only IT can manage admin and IT accounts.' : 'Invite people, set their role and department, and reset passwords. Admin and IT accounts are managed by IT.'} actions={<Button onClick={() => setForm({ mode: 'invite' })}>Invite user</Button>} />
       {notice && (
         <Banner tone={notice.tone} onDismiss={() => setNotice(null)}>
           {notice.text}
@@ -4598,6 +4721,7 @@ export function UsersPage() {
               <tbody>
                 {visible.map((u) => {
                   const isSelf = u.id === me?.id;
+                  const manageable = !!me && canManage(me, u.role);
                   return (
                     <tr key={u.id} className="border-b border-bg-alt align-top last:border-0">
                       <td className="py-3 pr-4">
@@ -4611,6 +4735,9 @@ export function UsersPage() {
                       </td>
                       <td className="py-3 pr-4 text-sm whitespace-nowrap">{formatDateTime(u.last_login_at)}</td>
                       <td className="py-3 text-right whitespace-nowrap">
+                        {!manageable ? (
+                          <span className="text-sm text-ink/50">Managed by IT</span>
+                        ) : (
                         <span className="inline-flex gap-4">
                           <button type="button" className={linkButton} onClick={() => setForm({ mode: 'edit', user: u })}>Edit</button>
                           {u.active && (
@@ -4624,6 +4751,7 @@ export function UsersPage() {
                             </button>
                           )}
                         </span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -4637,6 +4765,7 @@ export function UsersPage() {
         <UserFormDialog
           user={form.mode === 'edit' ? form.user : undefined}
           departments={departments}
+          roles={assignableRoles}
           isSelf={form.mode === 'edit' && form.user.id === me?.id}
           onClose={() => setForm(null)}
           onSaved={onSaved}
@@ -4655,30 +4784,22 @@ import { DepartmentsPage } from './pages/admin/DepartmentsPage';
 import { UsersPage } from './pages/admin/UsersPage';
 ```
 
-and replace the `admin/*` route with:
+and replace the `users` and `departments` placeholder routes with:
 
 ```tsx
             <Route
-              path="admin/users"
+              path="users"
               element={
-                <RequireRole roles={['admin']}>
+                <RequireRole roles={['admin', 'it']}>
                   <UsersPage />
                 </RequireRole>
               }
             />
             <Route
-              path="admin/departments"
+              path="departments"
               element={
                 <RequireRole roles={['admin']}>
                   <DepartmentsPage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="admin/*"
-              element={
-                <RequireRole roles={['admin']}>
-                  <ComingSoon />
                 </RequireRole>
               }
             />
@@ -4687,13 +4808,13 @@ and replace the `admin/*` route with:
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `cd frontend && npx tsc -b && npm test && cd ..`
-Expected: no type errors; all test files pass, including the Task 8 tests (the `/admin/users` session-expiry test now also exercises the real Users page).
+Expected: no type errors; all test files pass, including the Task 8 tests (the `/users` session-expiry test now also exercises the real Users page).
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add frontend/src
-git commit -m "feat: admin pages for departments and users with copyable set-password links"
+git commit -m "feat: users page for IT and admins, departments page for admins, copyable set-password links"
 ```
 
 ---
@@ -4716,7 +4837,7 @@ git commit -m "feat: admin pages for departments and users with copyable set-pas
 Internal visitor booking and check-in for Woodhall Capital, served at `https://visitor.woodhallcap.com`.
 Design: [`docs/superpowers/specs/2026-10-06-visitor-system-design.md`](docs/superpowers/specs/2026-10-06-visitor-system-design.md).
 
-**Status:** foundation, sign-in and admin (users, departments) are built. Booking, reception, security and IT
+**Status:** foundation, sign-in, user management (IT and admins) and departments (admins) are built. Booking, reception, security and IT
 screens show "Coming soon". Email is deliberately not built yet; admins share one-time set-password links instead.
 
 ## Tech stack
@@ -4735,8 +4856,8 @@ Prerequisites: PHP 8.1+ with `pdo_mysql`, MySQL running locally (root, no passwo
 mysql -uroot -e "CREATE DATABASE IF NOT EXISTS woodhall_visitor CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
 php migrations/migrate.php
 
-# 2. First admin (prints a one-time set-password link)
-php scripts/create-admin.php --name="Your Name" --email="you@woodhallcap.com"
+# 2. First IT account (prints a one-time set-password link); IT then invites the admins
+php scripts/create-it-user.php --name="Your Name" --email="you@woodhallcap.com"
 
 # 3. API on :8000
 php -S localhost:8000 api/index.php
@@ -4770,9 +4891,12 @@ cd frontend && npm test   # front end
 
 ## Accounts without email
 
-Until email is added (the last milestone), admins create users on **Users → Invite user** and get a one-time
-link to send through Teams, WhatsApp or in person. Invite links last 72 hours, reset links 1 hour. Forgotten
-passwords: an admin clicks **Reset password** on that user.
+IT controls accounts: only IT can create, edit or disable admin and IT accounts, so IT can appoint as many admins
+as needed. Admins manage staff, reception and security accounts and the department list.
+
+Until email is added (the last milestone), IT or an admin creates users on **Users → Invite user** and gets a
+one-time link to send through Teams, WhatsApp or in person. Invite links last 72 hours, reset links 1 hour.
+Forgotten passwords: IT or an admin clicks **Reset password** on that user (IT for admin and IT accounts).
 ````
 
 - [ ] **Step 2: Run every test**
@@ -4782,15 +4906,17 @@ Expected: all PHP files `0 failed`; all front-end tests pass; build succeeds.
 
 - [ ] **Step 3: Check the real app in a browser**
 
-Start both servers (`php -S localhost:8000 api/index.php` and `cd frontend && npm run dev`, each in the background), create an admin with `scripts/create-admin.php` against the dev database, then in Chrome (use the browser tools; record a GIF named `visitor-plan1-admin-flow.gif`):
+Start both servers (`php -S localhost:8000 api/index.php` and `cd frontend && npm run dev`, each in the background), create an IT account with `scripts/create-it-user.php` against the dev database, then in Chrome (use the browser tools; record a GIF named `visitor-plan1-user-management.gif`):
 
 1. Open the set-password link (replace the host with `http://localhost:5173` if `site_url` differs) → set a password → "Password set".
-2. Sign in → lands on **Users** with the brown sidebar, Woodhall Capital logo and admin navigation.
-3. **Departments**: add "Finance" → appears; rename it; deactivate and reactivate it.
-4. **Users**: invite a Staff user in Finance → a link dialog appears; copy the link.
-5. In a private window, open that link, set a password, sign in as the staff user → "Coming soon" with staff navigation (My visitors, Book a visitor). Visit `/admin/users` → "No access".
-6. Back as admin: disable the staff user; in the private window, click any nav item → returns to Sign in.
-7. Resize to 390 px wide: the sidebar collapses to a Menu button, tables scroll inside their cards, and the page itself does not scroll sideways.
+2. Sign in as IT → lands on the Dashboard placeholder; the brown sidebar shows Dashboard, Users, Today, All visits (no Departments).
+3. **Users**: invite an Admin → a link dialog appears; copy the link. The role picker offers IT and Admin.
+4. In a private window, use that link, sign in as the admin → lands on **Users**; the IT account's row says "Managed by IT"; the invite role picker offers only Staff, Reception, Security.
+5. As the admin, **Departments**: add "Finance", rename it, deactivate and reactivate it. Then invite a Staff user in Finance and copy the link.
+6. In another private window, set the staff password and sign in → "Coming soon" with staff navigation (My visitors, Book a visitor). Visit `/users` → "No access".
+7. As the admin, disable the staff user; in the staff window, click any nav item → returns to Sign in.
+8. As IT, demote the admin to Reception → in the admin's window, the next page load shows the Reception navigation.
+9. Resize to 390 px wide: the sidebar collapses to a Menu button, tables scroll inside their cards, and the page itself does not scroll sideways.
 
 Fix anything that does not behave as described, re-run Step 2, then stop both servers.
 
