@@ -1,0 +1,47 @@
+<?php
+declare(strict_types=1);
+
+function app_router(): Router
+{
+    static $router = null;
+    if ($router === null) {
+        $router = new Router();
+        register_health_routes($router);
+    }
+    return $router;
+}
+
+/**
+ * Handles one API request. A pure function of its arguments and $_SESSION, so tests call it directly.
+ * $headers must have lower-case names.
+ */
+function handle_request(
+    string $method,
+    string $path,
+    array $body = [],
+    array $query = [],
+    array $headers = [],
+    string $ip = '',
+    ?Router $router = null,
+): Response {
+    $GLOBALS['__request_ip'] = $ip;
+    try {
+        $path = (string) parse_url($path, PHP_URL_PATH);
+        $path = '/' . trim((string) preg_replace('#^/api(?=/|$)#', '', $path), '/');
+        $route = ($router ?? app_router())->match($method, $path);
+        if ($route === null) {
+            throw HttpError::notFound();
+        }
+        $result = ($route['handler'])(new Request($method, $path, $route['params'], $body, $query, $ip));
+        return $result instanceof Response ? $result : new Response(200, $result);
+    } catch (HttpError $e) {
+        $error = ['code' => $e->errorCode, 'message' => $e->getMessage()];
+        if ($e->fields) {
+            $error['fields'] = $e->fields;
+        }
+        return new Response($e->status, ['error' => $error]);
+    } catch (Throwable $e) {
+        error_log('[visitor] ' . $e);
+        return new Response(500, ['error' => ['code' => 'server_error', 'message' => 'Something went wrong. Please try again.']]);
+    }
+}
