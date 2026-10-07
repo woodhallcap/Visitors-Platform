@@ -2,6 +2,9 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { HomeRedirect, RequireAuth, RequireRole } from './components/guards';
 import { AuthProvider } from './lib/auth';
 import { ComingSoon } from './pages/ComingSoon';
+import { WalkInPage } from './pages/reception/WalkInPage';
+import { BookVisitorPage } from './pages/staff/BookVisitorPage';
+import { MyVisitorsPage } from './pages/staff/MyVisitorsPage';
 import { DepartmentsPage } from './pages/admin/DepartmentsPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -32,6 +35,9 @@ export default function App() {
                 </RequireRole>
               }
             />
+            <Route path="book" element={<RequireRole roles={['staff']}><BookVisitorPage /></RequireRole>} />
+            <Route path="my-visitors" element={<RequireRole roles={['staff']}><MyVisitorsPage /></RequireRole>} />
+            <Route path="reception/walk-in" element={<RequireRole roles={['reception', 'admin']}><WalkInPage /></RequireRole>} />
             <Route path="*" element={<ComingSoon />} />
           </Route>
         </Routes>

@@ -1,7 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
-import { api } from './lib/api';
 import { ADMIN, IT, STAFF, mockFetch, renderApp, signedInAs, signedOut } from './test-utils';
 
 test('signed-out visitors are sent to sign in', async () => {
@@ -15,9 +14,9 @@ test('signing in takes staff to their home page with their navigation', async ()
   await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
   await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
   await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-  expect(await screen.findByRole('heading', { name: 'Coming soon' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'My visitors' })).toBeInTheDocument();
   expect(window.location.pathname).toBe('/my-visitors');
-  expect(screen.getByRole('link', { name: 'Book a visitor' })).toBeInTheDocument();
+  expect(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Book a visitor' })).toBeInTheDocument();
   expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ email: 'chidi@woodhallcap.com', password: 'correct horse battery' });
 });
 
@@ -26,7 +25,7 @@ test('after sign-in the user returns to the page they first asked for', async ()
   await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
   await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
   await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-  await screen.findByRole('heading', { name: 'Coming soon' });
+  await screen.findByRole('heading', { name: 'Book a visitor' });
   expect(window.location.pathname).toBe('/book');
 });
 
@@ -86,7 +85,7 @@ test('a failed sign-out request that leaves the session alive keeps the user sig
     'POST /auth/logout': () => [500, { error: { code: 'server_error', message: 'Boom.' } }],
   });
   await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
-  await screen.findByRole('link', { name: 'Book a visitor' });
+  await screen.findByRole('heading', { name: 'My visitors' });
   expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument();
 });
@@ -105,7 +104,7 @@ test('after an explicit sign-out the next user does not land on the previous pag
   await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
   await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
   await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-  expect(await screen.findByRole('link', { name: 'Book a visitor' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'My visitors' })).toBeInTheDocument();
   expect(window.location.pathname).toBe('/my-visitors');
   expect(screen.queryByRole('heading', { name: 'No access' })).not.toBeInTheDocument();
 });
@@ -117,7 +116,7 @@ test('a crafted redirect target that leaves the site is ignored after sign-in', 
   await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
   await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
   await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-  await screen.findByRole('link', { name: 'Book a visitor' });
+  await screen.findByRole('heading', { name: 'My visitors' });
   expect(window.location.pathname).toBe('/my-visitors');
   expect(window.location.host).not.toBe('evil.example');
 });
@@ -127,9 +126,7 @@ test('a session that expires mid-use returns to sign in', async () => {
     ...signedInAs(STAFF),
     'GET /visits': () => [401, { error: { code: 'unauthenticated', message: 'Please sign in.' } }],
   });
-  // /my-visitors makes no API calls yet, so trigger one the way a page would.
-  await screen.findByRole('link', { name: 'Book a visitor' });
-  await api('GET', '/visits').catch(() => undefined);
+  // My visitors loads /visits on mount; a 401 there must end the session.
   expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
 });
 
@@ -174,6 +171,6 @@ test('a from path starting with a backslash is ignored after sign-in', async () 
   await userEvent.type(await screen.findByLabelText('Email'), 'chidi@woodhallcap.com');
   await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
   await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-  await screen.findByRole('link', { name: 'Book a visitor' });
+  await screen.findByRole('heading', { name: 'My visitors' });
   expect(window.location.pathname).toBe('/my-visitors');
 });

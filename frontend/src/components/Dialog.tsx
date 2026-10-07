@@ -17,7 +17,7 @@ export function Dialog({ title, onClose, children }: DialogProps) {
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-labelledby="dialog-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-brand bg-white p-6 shadow-card sm:p-8">
+      <div role="dialog" aria-modal="true" aria-labelledby="dialog-title" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-brand bg-white p-6 shadow-card sm:p-8">
         <h2 id="dialog-title" className="mb-5 text-2xl">
           {title}
         </h2>
