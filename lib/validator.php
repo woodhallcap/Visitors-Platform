@@ -35,3 +35,51 @@ function validate_password(mixed $value): ?string
     }
     return null;
 }
+
+/** Shape and format checks for a user. Department existence is checked by the users service. */
+function validate_user(array $input): array
+{
+    $errors = [];
+
+    $name = clean_text($input['full_name'] ?? '');
+    if (mb_strlen($name) < 2 || mb_strlen($name) > 120) {
+        $errors['full_name'] = 'Enter a full name (2–120 characters).';
+    }
+
+    $email = normalize_email($input['email'] ?? '');
+    if (strlen($email) > 190 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+        $errors['email'] = 'Enter a valid email address.';
+    }
+
+    $phone = null;
+    $rawPhone = clean_text($input['phone'] ?? '');
+    if ($rawPhone !== '') {
+        $phone = normalize_phone($rawPhone);
+        if ($phone === null) {
+            $errors['phone'] = 'Enter a valid phone number.';
+        }
+    }
+
+    $role = $input['role'] ?? '';
+    if (!in_array($role, ROLES, true)) {
+        $errors['role'] = 'Choose a role.';
+    }
+
+    $departmentId = $input['department_id'] ?? null;
+    if ($departmentId !== null && !is_int($departmentId)) {
+        $errors['department_id'] = 'Choose a department.';
+        $departmentId = null;
+    } elseif ($role === 'staff' && $departmentId === null) {
+        $errors['department_id'] = 'Staff need a department.';
+    }
+
+    $active = $input['active'] ?? true;
+    if (!is_bool($active)) {
+        $errors['active'] = 'Invalid value.';
+    }
+
+    if ($errors) {
+        throw HttpError::validation($errors);
+    }
+    return ['full_name' => $name, 'email' => $email, 'phone' => $phone, 'role' => $role, 'department_id' => $departmentId, 'active' => $active];
+}

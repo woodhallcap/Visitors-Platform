@@ -14,20 +14,13 @@ if (empty($opts['name']) || empty($opts['email'])) {
     exit(1);
 }
 
-$name = clean_text($opts['name']);
-$email = normalize_email($opts['email']);
-if (mb_strlen($name) < 2 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-    fwrite(STDERR, "Enter a full name and a valid email address.\n");
-    exit(1);
-}
 try {
-    $id = db_insert("INSERT INTO users (full_name, email, role) VALUES (?, ?, 'it')", [$name, $email]);
-} catch (PDOException $e) {
-    fwrite(STDERR, is_duplicate_key($e) ? "A user with this email already exists.\n" : $e->getMessage() . "\n");
+    $user = user_create(['full_name' => $opts['name'], 'email' => $opts['email'], 'role' => 'it'], null);
+} catch (HttpError $e) {
+    fwrite(STDERR, implode("\n", $e->fields ?: [$e->getMessage()]) . "\n");
     exit(1);
 }
-audit(null, 'user.invite', 'user', $id, ['role' => 'it', 'via' => 'cli']);
-$link = set_password_link($id, 'invite');
+$link = set_password_link($user['id'], 'invite');
 
-echo "IT account created: {$name} <{$email}>\n";
+echo "IT account created: {$user['full_name']} <{$user['email']}>\n";
 echo "Open this link before {$link['expires_at']} (WAT) to set the password:\n{$link['set_password_url']}\n";

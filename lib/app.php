@@ -9,6 +9,7 @@ function app_router(): Router
         register_health_routes($router);
         register_auth_routes($router);
         register_department_routes($router);
+        register_user_routes($router);
     }
     return $router;
 }
