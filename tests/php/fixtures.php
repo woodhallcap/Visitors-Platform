@@ -36,7 +36,8 @@ function make_user(string $role = 'staff', array $o = []): array
 
 function act_as(array $user): void
 {
-    $_SESSION = ['user_id' => $user['id'], 'last_seen' => time(), 'csrf' => bin2hex(random_bytes(32))];
+    $hash = db_one('SELECT password_hash FROM users WHERE id = ?', [$user['id']])['password_hash'] ?? null;
+    $_SESSION = ['user_id' => $user['id'], 'pw' => password_fingerprint($hash), 'last_seen' => time(), 'csrf' => bin2hex(random_bytes(32))];
 }
 
 function request(string $method, string $path, array $body = [], array $query = [], ?array $headers = null): Response

@@ -105,4 +105,14 @@ db_test('create-it-user CLI fails cleanly without arguments', function () {
     assert_true(str_contains($out, 'Usage'), $out);
 });
 
+db_test('set-password stores a fixed-cost bcrypt hash', function () {
+    $user = make_user('staff', ['password' => null]);
+    $token = token_issue($user['id'], 'invite')['token'];
+    assert_status(200, request('POST', '/auth/set-password', ['token' => $token, 'password' => 'a brand new pass']));
+    $info = password_get_info(db_one('SELECT password_hash FROM users WHERE id = ?', [$user['id']])['password_hash']);
+    assert_equal('bcrypt', $info['algoName']);
+    assert_equal(PASSWORD_OPTIONS['cost'], $info['options']['cost']);
+    assert_equal(12, $info['options']['cost']);
+});
+
 test_summary();

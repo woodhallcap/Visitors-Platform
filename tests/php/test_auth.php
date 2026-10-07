@@ -157,4 +157,30 @@ db_test('4 failures from one IP do not block a correct login from another', func
     assert_status(200, request('POST', '/auth/login', ['email' => 'ada@example.com', 'password' => TEST_PASSWORD]));
 });
 
+db_test('the dummy hash costs the same as real password hashes', function () {
+    assert_equal(PASSWORD_OPTIONS['cost'], password_get_info(DUMMY_PASSWORD_HASH)['options']['cost']);
+    assert_true(password_verify('not-a-real-password', DUMMY_PASSWORD_HASH), 'dummy hash must be a real hash');
+});
+
+db_test('a password changed in the database ends the existing session', function () {
+    $user = make_user('staff', ['email' => 'pw@example.com']);
+    assert_status(200, request('POST', '/auth/login', ['email' => 'pw@example.com', 'password' => TEST_PASSWORD]));
+    assert_status(200, request('GET', '/auth/me'));
+    db_exec('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash('something else entirely', PASSWORD_BCRYPT, ['cost' => 4]), $user['id']]);
+    assert_status(401, request('GET', '/auth/me'));
+    assert_equal([], $_SESSION);
+});
+
+db_test('using a reset link signs out the old sessions', function () {
+    $user = make_user('staff');
+    act_as($user);
+    $old = $_SESSION;
+    assert_status(200, request('GET', '/auth/me'));
+    $token = token_issue($user['id'], 'reset')['token'];
+    $_SESSION = [];
+    assert_status(200, request('POST', '/auth/set-password', ['token' => $token, 'password' => 'a brand new pass']));
+    $_SESSION = $old;
+    assert_status(401, request('GET', '/auth/me'));
+});
+
 test_summary();

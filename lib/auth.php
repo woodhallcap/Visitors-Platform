@@ -1,15 +1,10 @@
 <?php
 declare(strict_types=1);
 
-/**
- * A hash made with the same algorithm and cost as real passwords. Verifying against it when the email is
- * unknown keeps response times the same as for a wrong password. Computed once per process.
- */
-function dummy_password_hash(): string
-{
-    static $hash = null;
-    return $hash ??= password_hash('not-a-real-password', PASSWORD_DEFAULT);
-}
+// Every stored password uses PASSWORD_BCRYPT with PASSWORD_OPTIONS so the dummy verify costs exactly the same as a real one on any PHP version.
+const PASSWORD_OPTIONS = ['cost' => 12];
+// password_hash('not-a-real-password', PASSWORD_BCRYPT, ['cost' => 12]); verified against when the email is unknown.
+const DUMMY_PASSWORD_HASH = '$2y$12$GtatOUV8rnNDZfPVSN6uVOh4LQuZKIkuGbE8vVopLRSKXhX0vWaDq';
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_MAX_FAILURES_PER_EMAIL = 20;
 
@@ -21,6 +16,11 @@ function session_rotate(): void
 }
 
 /** The signed-in, active user, or null. Ends idle and disabled sessions. */
+function password_fingerprint(?string $hash): string
+{
+    return $hash === null ? '' : substr(hash('sha256', $hash), 0, 16);
+}
+
 function session_user(): ?array
 {
     $id = $_SESSION['user_id'] ?? null;
@@ -33,6 +33,12 @@ function session_user(): ?array
     }
     $user = user_find($id);
     if ($user === null || !$user['active']) {
+        $_SESSION = [];
+        return null;
+    }
+    // A changed password (e.g. a reset) ends every session that was started with the old one.
+    $current = db_one('SELECT password_hash FROM users WHERE id = ?', [$id])['password_hash'] ?? null;
+    if (!hash_equals(password_fingerprint($current), (string) ($_SESSION['pw'] ?? ''))) {
         $_SESSION = [];
         return null;
     }

@@ -30,7 +30,7 @@ function auth_login(Request $req): array
 
     $row = db_one('SELECT id, password_hash, active FROM users WHERE email = ?', [$email]);
     $hash = $row['password_hash'] ?? null;
-    $verified = password_verify($password, $hash ?? dummy_password_hash());
+    $verified = password_verify($password, $hash ?? DUMMY_PASSWORD_HASH);
     if (!$verified || $hash === null || $row['active'] !== 1) {
         login_record_failure($email, $req->ip);
         throw new HttpError(401, 'invalid_credentials', 'Email or password is incorrect.');
@@ -38,7 +38,7 @@ function auth_login(Request $req): array
 
     login_clear_failures($email, $req->ip);
     session_rotate();
-    $_SESSION = ['user_id' => $row['id'], 'last_seen' => time()];
+    $_SESSION = ['user_id' => $row['id'], 'last_seen' => time(), 'pw' => password_fingerprint($hash)];
     db_exec('UPDATE users SET last_login_at = NOW() WHERE id = ?', [$row['id']]);
     audit($row['id'], 'auth.login', 'user', $row['id']);
     return ['user' => user_find($row['id']), 'csrf_token' => csrf_token()];
@@ -64,11 +64,24 @@ function auth_set_password(Request $req): array
     if ($error !== null) {
         throw HttpError::validation(['password' => $error]);
     }
-    $token = token_consume(is_string($req->body['token'] ?? null) ? $req->body['token'] : '');
-    if ($token === null) {
-        throw new HttpError(422, 'token_invalid', 'This link has expired or has already been used. Ask an administrator for a new one.');
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $token = token_consume(is_string($req->body['token'] ?? null) ? $req->body['token'] : '');
+        if ($token === null) {
+            $pdo->rollBack();
+            throw new HttpError(422, 'token_invalid', 'This link has expired or has already been used. Ask an administrator for a new one.');
+        }
+        db_exec('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_BCRYPT, PASSWORD_OPTIONS), $token['user_id']]);
+        audit($token['user_id'], 'auth.set_password', 'user', $token['user_id'], ['purpose' => $token['purpose']]);
+        $pdo->commit();
+    } catch (HttpError $e) {
+        throw $e;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
     }
-    db_exec('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $token['user_id']]);
-    audit($token['user_id'], 'auth.set_password', 'user', $token['user_id'], ['purpose' => $token['purpose']]);
     return ['ok' => true];
 }
