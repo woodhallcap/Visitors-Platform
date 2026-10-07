@@ -1,6 +1,6 @@
 import type { FieldErrors } from './validation';
 import { isValidPhone } from './validation';
-import { VISITOR_TYPES, type Visit, type VisitorType } from '../types';
+import { VISITOR_GENDERS, VISITOR_TYPES, type Visit, type VisitorGender, type VisitorType } from '../types';
 
 export const VISITOR_TYPE_LABELS: Record<VisitorType, string> = {
   client: 'Client',
@@ -8,6 +8,12 @@ export const VISITOR_TYPE_LABELS: Record<VisitorType, string> = {
   interviewee: 'Interviewee',
   contractor: 'Contractor',
   guest: 'Guest',
+};
+
+export const VISITOR_GENDER_LABELS: Record<VisitorGender | 'not_recorded', string> = {
+  female: 'Female',
+  male: 'Male',
+  not_recorded: 'Not recorded',
 };
 
 const LAGOS = 'Africa/Lagos';
@@ -35,6 +41,7 @@ export interface VisitFormValues {
   visitor_email: string;
   visitor_company: string;
   visitor_type: VisitorType | '';
+  visitor_gender: VisitorGender | '';
   host_user_id: string;
   visit_date: string;
   expected_arrival: string;
@@ -45,7 +52,7 @@ export interface VisitFormValues {
 
 export function emptyVisitForm(today: string): VisitFormValues {
   return {
-    visitor_name: '', visitor_phone: '', visitor_email: '', visitor_company: '', visitor_type: '', host_user_id: '',
+    visitor_name: '', visitor_phone: '', visitor_email: '', visitor_company: '', visitor_type: '', visitor_gender: '', host_user_id: '',
     visit_date: today, expected_arrival: '', expected_departure: '', purpose: '', party_size: '0',
   };
 }
@@ -57,6 +64,7 @@ export function visitToForm(v: Visit): VisitFormValues {
     visitor_email: v.visitor_email ?? '',
     visitor_company: v.visitor_company ?? '',
     visitor_type: v.visitor_type,
+    visitor_gender: v.visitor_gender ?? '',
     host_user_id: String(v.host_user_id),
     visit_date: v.visit_date,
     expected_arrival: v.expected_arrival,
@@ -79,6 +87,7 @@ export function validateVisitForm(v: VisitFormValues, opts: { needsHost: boolean
   if (v.visitor_email.trim() !== '' && !EMAIL_RE.test(v.visitor_email.trim())) e.visitor_email = 'Enter a valid email address.';
   if (length(v.visitor_company) > 120) e.visitor_company = 'Use 120 characters or fewer.';
   if (!VISITOR_TYPES.includes(v.visitor_type as VisitorType)) e.visitor_type = 'Choose a visitor type.';
+  if (!VISITOR_GENDERS.includes(v.visitor_gender as VisitorGender)) e.visitor_gender = "Choose the visitor's gender.";
   if (opts.needsHost && v.host_user_id === '') e.host_user_id = 'Choose the person being visited.';
   if (!DATE_RE.test(v.visit_date) || Number.isNaN(Date.parse(`${v.visit_date}T00:00:00Z`))) e.visit_date = 'Enter a valid date.';
   else if (v.visit_date < opts.today) e.visit_date = 'Choose today or a later date.';
@@ -99,6 +108,7 @@ export interface VisitPayload {
   visitor_email: string;
   visitor_company: string;
   visitor_type: VisitorType | '';
+  visitor_gender: VisitorGender | '';
   visit_date: string;
   expected_arrival: string;
   expected_departure: string | null;
@@ -114,6 +124,7 @@ export function visitPayload(v: VisitFormValues, needsHost: boolean): VisitPaylo
     visitor_email: v.visitor_email,
     visitor_company: v.visitor_company,
     visitor_type: v.visitor_type,
+    visitor_gender: v.visitor_gender,
     visit_date: v.visit_date,
     expected_arrival: v.expected_arrival,
     expected_departure: v.expected_departure === '' ? null : v.expected_departure,

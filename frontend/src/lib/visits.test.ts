@@ -4,7 +4,7 @@ import { makeVisit } from '../test-utils';
 
 const valid = {
   ...emptyVisitForm('2026-10-07'),
-  visitor_name: 'Tola Ade', visitor_phone: '0803 123 4567', visitor_type: 'client' as const,
+  visitor_name: 'Tola Ade', visitor_phone: '0803 123 4567', visitor_type: 'client' as const, visitor_gender: 'female' as const,
   expected_arrival: '10:30', purpose: 'Quarterly review',
 };
 
@@ -26,7 +26,7 @@ test('a valid form has no errors', () => {
 test('form errors match the server messages', () => {
   expect(
     validateVisitForm(
-      { visitor_name: 'A', visitor_phone: '1', visitor_email: 'x', visitor_company: 'c'.repeat(121), visitor_type: '', host_user_id: '',
+      { visitor_name: 'A', visitor_phone: '1', visitor_email: 'x', visitor_company: 'c'.repeat(121), visitor_type: '', visitor_gender: '', host_user_id: '',
         visit_date: '2026-10-06', expected_arrival: '', expected_departure: '9am', purpose: 'hi', party_size: '51' },
       { needsHost: true, today: '2026-10-07' },
     ),
@@ -36,6 +36,7 @@ test('form errors match the server messages', () => {
     visitor_email: 'Enter a valid email address.',
     visitor_company: 'Use 120 characters or fewer.',
     visitor_type: 'Choose a visitor type.',
+    visitor_gender: "Choose the visitor's gender.",
     host_user_id: 'Choose the person being visited.',
     visit_date: 'Choose today or a later date.',
     expected_arrival: 'Enter the expected arrival time (HH:MM).',
@@ -53,7 +54,7 @@ test('departure must be after arrival', () => {
 
 test('the payload converts numbers and blanks', () => {
   expect(visitPayload({ ...valid, host_user_id: '7', party_size: '2' }, true)).toEqual({
-    visitor_name: 'Tola Ade', visitor_phone: '0803 123 4567', visitor_email: '', visitor_company: '', visitor_type: 'client',
+    visitor_name: 'Tola Ade', visitor_phone: '0803 123 4567', visitor_email: '', visitor_company: '', visitor_type: 'client', visitor_gender: 'female',
     visit_date: '2026-10-07', expected_arrival: '10:30', expected_departure: null, purpose: 'Quarterly review',
     party_size: 2, host_user_id: 7,
   });

@@ -37,6 +37,7 @@ Check each screen at **desktop width** and at **phone width** (browser dev tools
 
 - [ ] **My visitors** shows Upcoming (today and later) and Past.
 - [ ] **Book a visitor**: book someone for today; the success message appears and the form clears.
+- [ ] Leaving **Gender** empty shows "Choose the visitor's gender."; it offers only Female and Male.
 - [ ] The new visit appears under Upcoming. **Edit** it (change the arrival time) and **Cancel** another.
 - [ ] Opening `/users` shows "No access".
 
@@ -45,7 +46,7 @@ Check each screen at **desktop width** and at **phone width** (browser dev tools
 - [ ] **Today**: Expected, On site and Left columns show the seeded visitors; the overstayed contractor (Grace Okon) is flagged copper.
 - [ ] **Check in** the staff booking from above with a badge number; it moves to On site.
 - [ ] **Check out** a visitor; they move to Left.
-- [ ] **Book walk-in**: date and time are pre-filled; pick a host; you return to Today and the visitor is under Expected.
+- [ ] **Book walk-in**: date and time are pre-filled; gender is required; pick a host; you return to Today and the visitor is under Expected.
 - [ ] **All visits**: search by name; cancel a future booking.
 
 ## Security (demo-security)
@@ -56,9 +57,9 @@ Check each screen at **desktop width** and at **phone width** (browser dev tools
 
 ## IT (demo-it)
 
-- [ ] **Dashboard**: five stat cards and four charts; hovering a column shows a tooltip.
+- [ ] **Dashboard**: five stat cards, the per-day and by-hour charts, and the visitor type, gender (with the female/male share) and department lists; hovering a column shows a tooltip.
 - [ ] Change the range (e.g. last 7 days) → the numbers update; a backwards range shows an error.
-- [ ] **Download CSV** opens in Excel with readable phone numbers.
+- [ ] **Download CSV** opens in Excel with readable phone numbers and a Gender column.
 - [ ] **Users**: invite an Admin → copy the set-password link → open it in a private window → set a password → sign in.
 - [ ] **Today** and **All visits** show visits but no check-in, edit or cancel buttons.
 

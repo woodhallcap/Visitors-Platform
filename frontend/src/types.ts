@@ -35,6 +35,8 @@ export interface SessionPayload {
 
 export type VisitorType = 'client' | 'vendor' | 'interviewee' | 'contractor' | 'guest';
 export const VISITOR_TYPES: VisitorType[] = ['client', 'vendor', 'interviewee', 'contractor', 'guest'];
+export type VisitorGender = 'female' | 'male';
+export const VISITOR_GENDERS: VisitorGender[] = ['female', 'male'];
 export type VisitStatus = 'booked' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
 
 export interface Visit {
@@ -44,6 +46,8 @@ export interface Visit {
   visitor_email: string | null;
   visitor_company: string | null;
   visitor_type: VisitorType;
+  /** Null only for visits booked before gender was collected. */
+  visitor_gender: VisitorGender | null;
   host_user_id: number;
   host_name: string;
   department_id: number | null;
@@ -87,6 +91,7 @@ export interface Stats {
   };
   per_day: { date: string; count: number }[];
   by_type: { type: VisitorType; count: number }[];
+  by_gender: { gender: VisitorGender | 'not_recorded'; count: number }[];
   by_department: { department: string; count: number }[];
   by_hour: { hour: number; count: number }[];
 }

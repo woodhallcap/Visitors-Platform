@@ -66,6 +66,7 @@ export function makeVisit(o: Partial<Visit> = {}): Visit {
     visitor_email: null,
     visitor_company: 'Acme Ltd',
     visitor_type: 'client',
+    visitor_gender: 'female',
     host_user_id: STAFF.id,
     host_name: STAFF.full_name,
     department_id: 1,

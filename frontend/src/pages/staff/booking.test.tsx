@@ -10,6 +10,7 @@ async function fillVisitor() {
   await userEvent.type(screen.getByLabelText("Visitor's full name"), 'Tola Ade');
   await userEvent.type(screen.getByLabelText('Phone'), '0803 123 4567');
   await userEvent.selectOptions(screen.getByLabelText('Visitor type'), 'client');
+  await userEvent.selectOptions(screen.getByLabelText('Gender'), 'female');
   await userEvent.type(screen.getByLabelText('Expected arrival'), '10:30');
   await userEvent.type(screen.getByLabelText('Purpose of visit'), 'Quarterly review');
 }
@@ -23,7 +24,7 @@ test('staff book a visitor for themselves', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Book visitor' }));
   expect(await screen.findByText(/Tola Ade is booked for/)).toBeInTheDocument();
   const body = calls.find((c) => c.method === 'POST')?.body as Record<string, unknown>;
-  expect(body).toMatchObject({ visitor_name: 'Tola Ade', visitor_type: 'client', visit_date: today, expected_arrival: '10:30', party_size: 0, expected_departure: null });
+  expect(body).toMatchObject({ visitor_name: 'Tola Ade', visitor_type: 'client', visitor_gender: 'female', visit_date: today, expected_arrival: '10:30', party_size: 0, expected_departure: null });
   expect(body).not.toHaveProperty('host_user_id');
   expect(screen.getByLabelText("Visitor's full name")).toHaveValue('');
 });
@@ -60,12 +61,13 @@ test('reception books a walk-in for a chosen host and returns to Today', async (
   await userEvent.type(screen.getByLabelText("Visitor's full name"), 'Tola Ade');
   await userEvent.type(screen.getByLabelText('Phone'), '08031234567');
   await userEvent.selectOptions(screen.getByLabelText('Visitor type'), 'vendor');
+  await userEvent.selectOptions(screen.getByLabelText('Gender'), 'male');
   await userEvent.selectOptions(screen.getByLabelText('Person being visited'), '2');
   await userEvent.type(screen.getByLabelText('Purpose of visit'), 'Delivery');
   await userEvent.click(screen.getByRole('button', { name: 'Book walk-in' }));
   await screen.findByRole('heading', { name: 'Today' });
   expect(window.location.pathname).toBe('/reception/today');
-  expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ host_user_id: 2, visitor_type: 'vendor', visit_date: today });
+  expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ host_user_id: 2, visitor_type: 'vendor', visitor_gender: 'male', visit_date: today });
 });
 
 test('a walk-in needs a host', async () => {

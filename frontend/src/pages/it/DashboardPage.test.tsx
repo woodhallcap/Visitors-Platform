@@ -18,6 +18,7 @@ function stats(overrides: Partial<Stats> = {}, days = 30, start = from): Stats {
       { type: 'client', count: 20 }, { type: 'vendor', count: 15 }, { type: 'interviewee', count: 10 },
       { type: 'contractor', count: 7 }, { type: 'guest', count: 5 },
     ],
+    by_gender: [{ gender: 'female', count: 21 }, { gender: 'male', count: 29 }, { gender: 'not_recorded', count: 7 }],
     by_department: [{ department: 'Finance', count: 30 }, { department: 'No department', count: 4 }],
     by_hour: Array.from({ length: 24 }, (_, hour) => ({ hour, count: hour === 9 ? 12 : 0 })),
     ...overrides,
@@ -135,4 +136,14 @@ test('server field errors appear on the inputs and the download link keeps the l
   await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
   expect(await screen.findByText('Enter a valid date.')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', `/api/visits/export.csv?from=${from}&to=${today}`);
+});
+
+test('the gender chart shows female, male and not recorded, with the female share of recorded visits', async () => {
+  renderApp('/it/dashboard', { ...signedInAs(IT), [defaultKey]: () => [200, stats()] });
+  const genders = await screen.findByRole('list', { name: 'By gender' });
+  expect(within(genders).getByText('Female')).toBeInTheDocument();
+  expect(within(genders).getByText('21')).toBeInTheDocument();
+  expect(within(genders).getByText('Male')).toBeInTheDocument();
+  expect(within(genders).getByText('Not recorded')).toBeInTheDocument();
+  expect(screen.getByText('Female 42% · Male 58% of recorded visits')).toBeInTheDocument();
 });
