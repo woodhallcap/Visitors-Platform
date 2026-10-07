@@ -286,8 +286,8 @@ SMS, a self check-in kiosk, visitor photo capture, badge printing, data retentio
 | --- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | 1   | List of departments                                                                                                             | CTO                                |
 | 2   | Email details: sender mailbox on woodhallcap.com, and an Entra app registration (tenant ID, client ID, secret) with `Mail.Send` | CTO / M365 admin                   |
-| 3   | Office address and contact line shown in the visitor invitation                                                                 | Yeah                               |
-| 4   | Data retention for visitor phone and ID numbers (NDPR)                                                                          | Yeah                               |
+| 3   | Office address and contact line shown in the visitor invitation                                                                 | CTO                                |
+| 4   | Data retention for visitor phone and ID numbers (NDPR)                                                                          | CTO                                |
 | 5   | MySQL database and user on Bluehost, and PHP version on box5735                                                                 | whoever holds the Bluehost account |
 | 6   | Whether the old Power Apps data needs importing                                                                                 | NO                                 |
 | 7   | Who gets the first admin account                                                                                                | IT                                 |
