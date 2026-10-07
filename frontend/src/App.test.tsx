@@ -202,3 +202,11 @@ test('the sign-in form sits on a card between a brand header and a help footer',
   expect(screen.getByRole('banner')).toHaveTextContent('Woodhall Capital');
   expect(screen.getByRole('contentinfo')).toHaveTextContent(/Internal use only.*Need help\? Ask your IT team\..*© \d{4} Woodhall Capital/);
 });
+
+test('on large screens the app shell is fixed and only the content area scrolls', async () => {
+  renderApp('/my-visitors', signedInAs(STAFF));
+  const main = await screen.findByRole('main');
+  expect(main.className).toMatch(/lg:overflow-y-auto/);
+  expect(main.parentElement?.className).toMatch(/lg:h-dvh/);
+  expect(main.parentElement?.className).toMatch(/lg:overflow-hidden/);
+});

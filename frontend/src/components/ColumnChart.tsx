@@ -65,22 +65,25 @@ export function ColumnChart({ title, description, data, labelEvery }: ColumnChar
           ))}
         </div>
       </div>
-      <table aria-label={title} className="sr-only">
-        <thead>
-          <tr>
-            <th>Label</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((d) => (
-            <tr key={d.label}>
-              <td>{d.label}</td>
-              <td>{d.value}</td>
+      {/* sr-only goes on a wrapper: tables ignore its height limit and would stretch the page. */}
+      <div className="sr-only">
+        <table aria-label={title}>
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Value</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map((d) => (
+              <tr key={d.label}>
+                <td>{d.label}</td>
+                <td>{d.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }
