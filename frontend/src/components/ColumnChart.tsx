@@ -19,6 +19,8 @@ export function ColumnChart({ title, description, data, labelEvery }: ColumnChar
   const [active, setActive] = useState<number | null>(null);
   const max = Math.max(1, ...data.map((d) => d.value));
   const every = labelEvery ?? Math.max(1, Math.ceil(data.length / 12));
+  // Fixed 2px gaps don't shrink: past ~60 columns they alone would overflow a phone or a year-long chart.
+  const gap = data.length > 60 ? '' : 'gap-[2px]';
 
   return (
     <figure aria-label={title} className="m-0 rounded-brand bg-white p-5 shadow-card sm:p-6">
@@ -32,7 +34,7 @@ export function ColumnChart({ title, description, data, labelEvery }: ColumnChar
             <span>{max}</span>
             <span>0</span>
           </div>
-          <div className="relative flex h-44 flex-1 items-end gap-[2px] border-b border-ink/15">
+          <div data-testid="columns" className={`relative flex h-44 flex-1 items-end ${gap} border-b border-ink/15`}>
             {data.map((d, i) => (
               <div key={d.label} className="relative flex h-full flex-1 items-end justify-center">
                 <div
@@ -55,7 +57,7 @@ export function ColumnChart({ title, description, data, labelEvery }: ColumnChar
             ))}
           </div>
         </div>
-        <div aria-hidden="true" className="mt-1 ml-9 flex gap-[2px] text-[11px] text-ink/60">
+        <div aria-hidden="true" className={`mt-1 ml-9 flex ${gap} text-[11px] text-ink/60`}>
           {data.map((d, i) => (
             <span key={d.label} className="flex-1 overflow-visible text-center whitespace-nowrap">
               {i % every === 0 ? <span data-testid="x-label">{d.label}</span> : ''}

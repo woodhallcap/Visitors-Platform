@@ -125,13 +125,28 @@ function csv_cell(mixed $value): string
     return '"' . str_replace('"', '""', $text) . '"';
 }
 
+/** Phones and numeric IDs: written as ="…" so Excel keeps them as text (no 2.34803E+12, no lost leading zero). Only for digit strings, so nothing else can ride along as a formula. */
+function csv_text_cell(mixed $value): string
+{
+    $text = $value === null ? '' : (string) $value;
+    if (preg_match('/^\+?\d+$/', $text)) {
+        return '"=""' . $text . '"""';
+    }
+    return csv_cell($value);
+}
+
+const CSV_TEXT_FIELDS = ['visitor_phone', 'id_number'];
+
 function visits_export_csv(string $from, string $to): string
 {
     $rows = db_all(VISIT_SELECT . ' WHERE v.visit_date BETWEEN ? AND ? ORDER BY v.visit_date, v.expected_arrival, v.id', [$from, $to]);
     $lines = [implode(',', array_map('csv_cell', array_keys(CSV_COLUMNS)))];
     foreach ($rows as $row) {
         $visit = visit_row($row);
-        $lines[] = implode(',', array_map(fn(string $field) => csv_cell($visit[$field]), CSV_COLUMNS));
+        $lines[] = implode(',', array_map(
+            fn(string $field) => in_array($field, CSV_TEXT_FIELDS, true) ? csv_text_cell($visit[$field]) : csv_cell($visit[$field]),
+            CSV_COLUMNS
+        ));
     }
     // The BOM makes Excel read the file as UTF-8 (names with accents, ₦, etc.).
     return "\u{FEFF}" . implode("\r\n", $lines) . "\r\n";

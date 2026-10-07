@@ -108,3 +108,31 @@ test.each([['staff', STAFF], ['security', SECURITY]])('%s cannot open the dashbo
   renderApp('/it/dashboard', signedInAs(user));
   expect(await screen.findByRole('heading', { name: 'No access' })).toBeInTheDocument();
 });
+
+test('a range longer than 366 days is caught before any request', async () => {
+  const { calls } = renderApp('/it/dashboard', { ...signedInAs(IT), [defaultKey]: () => [200, stats()] });
+  await screen.findByRole('table', { name: 'Visits per day' });
+  const before = calls.length;
+  const fromInput = screen.getByLabelText('From');
+  await userEvent.clear(fromInput);
+  await userEvent.type(fromInput, addDays(today, -400));
+  await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+  expect(screen.getByText('Choose a range of at most 366 days.')).toBeInTheDocument();
+  expect(calls.length).toBe(before);
+});
+
+test('server field errors appear on the inputs and the download link keeps the last loaded range', async () => {
+  const newFrom = addDays(today, -10);
+  renderApp('/it/dashboard', {
+    ...signedInAs(IT),
+    [defaultKey]: () => [200, stats()],
+    [`GET /stats?from=${newFrom}&to=${today}`]: () => [422, { error: { code: 'validation_failed', message: 'Please correct the highlighted fields.', fields: { from: 'Enter a valid date.' } } }],
+  });
+  await screen.findByRole('table', { name: 'Visits per day' });
+  const fromInput = screen.getByLabelText('From');
+  await userEvent.clear(fromInput);
+  await userEvent.type(fromInput, newFrom);
+  await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+  expect(await screen.findByText('Enter a valid date.')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', `/api/visits/export.csv?from=${from}&to=${today}`);
+});

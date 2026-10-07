@@ -7,19 +7,21 @@ import { ColumnChart } from '../../components/ColumnChart';
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { TextInput } from '../../components/TextInput';
-import { api, messageOf } from '../../lib/api';
+import { ApiError, api, messageOf } from '../../lib/api';
 import { formatDate, formatDuration, formatPercent, formatShortDate } from '../../lib/format';
 import { VISITOR_TYPE_LABELS, addDays, todayInLagos, visitsQuery } from '../../lib/visits';
 import type { Stats } from '../../types';
 
 const pad = (n: number) => String(n).padStart(2, '0');
+const MAX_DAYS = 366;
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
 
 export function DashboardPage() {
   const today = todayInLagos();
   const [from, setFrom] = useState(addDays(today, -29));
   const [to, setTo] = useState(today);
   const [range, setRange] = useState({ from: addDays(today, -29), to: today });
-  const [rangeError, setRangeError] = useState<string | undefined>();
+  const [rangeErrors, setRangeErrors] = useState<{ from?: string; to?: string }>({});
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +36,11 @@ export function DashboardPage() {
           setError(null);
         }
       })
-      .catch((err) => !cancelled && setError(messageOf(err)));
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && Object.keys(err.fields).length) setRangeErrors(err.fields);
+        else setError(messageOf(err));
+      });
     return () => {
       cancelled = true;
     };
@@ -43,10 +49,14 @@ export function DashboardPage() {
   const apply = (e: FormEvent) => {
     e.preventDefault();
     if (from && to && to < from) {
-      setRangeError('The end date must be on or after the start date.');
+      setRangeErrors({ to: 'The end date must be on or after the start date.' });
       return;
     }
-    setRangeError(undefined);
+    if (from && to && daysBetween(from, to) > MAX_DAYS) {
+      setRangeErrors({ from: 'Choose a range of at most 366 days.' });
+      return;
+    }
+    setRangeErrors({});
     setRange({ from, to });
   };
 
@@ -58,15 +68,15 @@ export function DashboardPage() {
         title="Dashboard"
         description={stats ? `${formatDate(stats.from)} – ${formatDate(stats.to)}` : 'Visitor statistics'}
         actions={
-          <a href={`/api/visits/export.csv${query}`} download className="inline-flex items-center rounded-full border border-primary px-6 py-2.5 text-[15px] font-semibold text-primary no-underline hover:bg-primary/5">
+          <a href={`/api/visits/export.csv${stats ? visitsQuery({ from: stats.from, to: stats.to }) : query}`} download className="inline-flex items-center rounded-full border border-primary px-6 py-2.5 text-[15px] font-semibold text-primary no-underline hover:bg-primary/5">
             Download CSV
           </a>
         }
       />
       <Card className="mb-6">
         <form onSubmit={apply} noValidate className="grid gap-x-5 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
-          <TextInput label="From" name="from" type="date" value={from} max={today} onChange={(e) => setFrom(e.target.value)} />
-          <TextInput label="To" name="to" type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} error={rangeError} />
+          <TextInput label="From" name="from" type="date" value={from} max={today} onChange={(e) => setFrom(e.target.value)} error={rangeErrors.from} />
+          <TextInput label="To" name="to" type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} error={rangeErrors.to} />
           <Button type="submit" className="sm:mt-8">
             Apply
           </Button>

@@ -112,11 +112,19 @@ db_test('the CSV export lists visits in range with safe cells', function () {
     assert_equal(3, count($lines));
     assert_true(str_contains($lines[1], '"Early Bird"'), 'rows are ordered by arrival');
     assert_true(str_contains($lines[2], '"\'=HYPERLINK(""http://evil"",""x"")"'), 'formula must be neutralised: ' . $lines[2]);
-    assert_true(str_contains($lines[2], '"+2348031234567"'), 'phone must stay readable');
+    assert_true(str_contains($lines[2], '"=""+2348031234567"""'), 'phone must be a text cell so Excel keeps it readable: ' . $lines[2]);
     assert_true(str_contains($lines[2], '"Says ""hello"""'), 'quotes must be doubled');
     assert_true(str_contains($lines[2], '"Chidi Okafor","Finance"'), 'host and department expected');
     assert_true(!str_contains($response->raw, 'Too Old'), 'out-of-range visit leaked');
     assert_equal(1, db_one("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'visits.export' AND user_id = ?", [$it['id']])['n']);
+});
+
+test_case('csv_text_cell keeps digit strings as text in Excel and falls back to csv_cell otherwise', function () {
+    assert_equal('"=""08031234567"""', csv_text_cell('08031234567'));
+    assert_equal('"=""+2348031234567"""', csv_text_cell('+2348031234567'));
+    assert_equal('"A1234567"', csv_text_cell('A1234567'));
+    assert_equal('"\'=1+2"', csv_text_cell('=1+2'));
+    assert_equal('""', csv_text_cell(null));
 });
 
 test_case('csv_cell neutralises formulas but keeps plain numbers', function () {

@@ -14,7 +14,7 @@ Audience: whoever holds the Bluehost cPanel login. Takes about 20 minutes the fi
 3. **Database.** cPanel → *MySQL Databases*: create a database (e.g. `CPANELUSER_visitor`), a user with a long random password, and add the user to the database with **ALL PRIVILEGES**.
 4. **Upload.** cPanel → *File Manager* → open the document root → *Upload* `visitor-deploy.zip` → *Extract*. Move the **contents** of the extracted `visitor/` folder up into the document root (so `index.html` and `.htaccess` sit directly in it), then delete the empty `visitor/` folder and the zip. Enable *Show Hidden Files* to see `.htaccess`.
 5. **Configuration.** In the document root, copy `config.local.example.php` to `config.local.php` and fill in the database name, user and password from step 3. Keep `site_url` as `https://visitor.woodhallcap.com` and `cookie_secure` as `true`.
-6. **Create the tables.** cPanel → *Terminal* (or SSH): `cd ~/visitor.woodhallcap.com && php migrations/migrate.php` → `Applied: 001_init.sql, 002_indexes.sql`. If `php` is an older version in the terminal, use the full path shown in MultiPHP Manager (e.g. `/usr/local/bin/ea-php81`).
+6. **Create the tables.** cPanel → *Terminal* (or SSH). If you don't see *Terminal*, enable SSH access in the Bluehost account (Advanced → *SSH Access*) or ask Bluehost support to turn it on. Then, using the document root from step 2: `cd /home/CPANELUSER/visitor.woodhallcap.com && php migrations/migrate.php` → `Applied: 001_init.sql, 002_indexes.sql`. If `php` is an older version in the terminal, use the full path shown in MultiPHP Manager (e.g. `/usr/local/bin/ea-php81`).
 7. **SSL.** cPanel → *SSL/TLS Status* → run **AutoSSL** for `visitor.woodhallcap.com` and wait for a green padlock.
 8. **First IT account.** In the terminal: `php scripts/create-it-user.php --name="IT Person" --email="it@woodhallcap.com"`. Open the printed link within 72 hours to set the password, sign in, then invite admins and everyone else from **Users**.
 
@@ -38,7 +38,13 @@ If any of the 403 checks returns 200, stop and fix `.htaccess` before anyone use
 
 ## Updating
 
-1. Build a new zip. 2. Upload and extract it next to the live files, then copy everything **except** `config.local.php` and `storage/` over the live document root. 3. Run `php migrations/migrate.php` (it only applies new migrations). 4. Run the checks above.
+1. **Back up the database first:** cPanel → *phpMyAdmin* → select the visitor database → *Export* → *Go*. Keep the `.sql` file until the update is checked.
+2. Build a new zip (`scripts/package.sh`).
+3. In *File Manager*, upload the zip to your **home folder** (not the document root) and extract it there. This creates `~/visitor/`.
+4. Copy the **contents** of `~/visitor/` over the live document root, replacing files. The zip contains no `config.local.php` or `storage/` data, so your settings, sessions and logs are left alone.
+5. Delete `~/visitor/` and the zip from your home folder.
+6. In the terminal, from the document root: `php migrations/migrate.php` (it applies only new migrations).
+7. Run the checks above. If something is wrong, restore the files from the previous zip and the database from the backup (phpMyAdmin → *Import*).
 
 ## Troubleshooting
 
