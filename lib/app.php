@@ -10,6 +10,7 @@ function app_router(): Router
         register_auth_routes($router);
         register_department_routes($router);
         register_user_routes($router);
+        register_visit_routes($router);
     }
     return $router;
 }

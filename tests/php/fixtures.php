@@ -45,3 +45,47 @@ function request(string $method, string $path, array $body = [], array $query = 
     $headers ??= ['content-type' => 'application/json'] + (isset($_SESSION['csrf']) ? ['x-csrf-token' => $_SESSION['csrf']] : []);
     return handle_request($method, $path, $body, $query, $headers, TEST_IP);
 }
+
+function make_visit(array $o = []): array
+{
+    $host = isset($o['host_user_id']) ? user_find($o['host_user_id']) : make_user('staff');
+    $row = array_merge([
+        'visitor_name' => 'Tola Ade',
+        'visitor_phone' => '08031234567',
+        'visitor_email' => null,
+        'visitor_company' => 'Acme Ltd',
+        'visitor_type' => 'client',
+        'host_user_id' => $host['id'],
+        'department_id' => $host['department_id'],
+        'booked_by_user_id' => $host['id'],
+        'channel' => 'staff',
+        'visit_date' => date('Y-m-d'),
+        'expected_arrival' => '10:00',
+        'expected_departure' => null,
+        'purpose' => 'Quarterly review',
+        'party_size' => 0,
+        'status' => 'booked',
+    ], $o);
+    $columns = array_keys($row);
+    $id = db_insert(
+        'INSERT INTO visits (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')',
+        array_values($row)
+    );
+    return visit_find($id);
+}
+
+function visit_body(array $o = []): array
+{
+    return array_merge([
+        'visitor_name' => 'Tola Ade',
+        'visitor_phone' => '0803 123 4567',
+        'visitor_email' => 'tola@acme.example',
+        'visitor_company' => 'Acme Ltd',
+        'visitor_type' => 'client',
+        'visit_date' => date('Y-m-d', strtotime('+1 day')),
+        'expected_arrival' => '10:30',
+        'expected_departure' => '11:30',
+        'purpose' => 'Quarterly review',
+        'party_size' => 1,
+    ], $o);
+}
